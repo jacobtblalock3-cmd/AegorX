@@ -22,9 +22,10 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 
 | Layer      | Tech                | Role                                                        |
 |------------|---------------------|-------------------------------------------------------------|
-| CLI        | argparse            | `scan`, `db`, `quarantine`, `model`, `monitor` commands       |
+| CLI        | argparse            | `scan`, `db`, `quarantine`, `model`, `monitor`, `keys`, `feed` commands |
 | Engine     | Python              | Orchestrates detectors, computes verdicts                    |
 | Real-time  | ctypes (Linux)      | fanotify blocking on-access + inotify watch mode             |
+| Updates    | Ed25519 + urllib    | Signed signature feeds, verified against pinned root keys    |
 | Signatures | SQLite              | MD5/SHA-1/SHA-256 known-threat lookups (JSON import/export)  |
 | YARA       | yara-python         | Pattern/rule-based detection (`rules/*.yar`)                 |
 | ML         | LightGBM            | Static-feature malware classifier (PE + ELF)                 |
@@ -89,6 +90,37 @@ sudo cp packaging/systemd/defentra-monitor.service /etc/systemd/system/
 sudo systemctl enable --now defentra-monitor
 ```
 
+### Signature feed updates
+
+Threat intelligence ships as **signed feeds** (Ed25519). Every install trusts
+the bundled root key (`defentra/signing/trusted_keys/`); feeds are verified,
+expiry-checked, and replay-protected before a single signature touches your DB:
+
+```bash
+defentra feed update                     # fetch official feed, verify, apply
+defentra feed verify my-feed.json        # check any signed feed locally
+defentra keys list                       # show trusted keys + fingerprints
+```
+
+Publishing your own feed:
+
+```bash
+defentra keys generate --out ~/signing   # once; keep the private key offline
+python - <<'EOF'
+from defentra.signing.feed import new_feed, save_feed
+save_feed(new_feed([{"sha256": "<hash>", "name": "Win32.Family", "severity": 8}]), "feed.json")
+EOF
+defentra feed sign feed.json --key ~/signing/signing_private.pem
+defentra keys trust ~/signing/signing_public.pem   # recipients run this
+```
+
+Run updates automatically with the provided timer:
+
+```bash
+sudo cp packaging/systemd/defentra-feed-update.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now defentra-feed-update.timer
+```
+
 ### Train your own ML detector
 
 The published EMBER reference model gives you ML detection immediately
@@ -126,7 +158,8 @@ The engine uses `_defentra_core.stream_sha256` automatically when present.
 - [x] Signature DB + YARA + static ML pipeline + quarantine vault + CLI
 - [x] Real-time on-access scanning (fanotify blocking mode / inotify watch mode)
 - [x] EMBER training pipeline + `model fetch` installer (reference artifact published via CI)
-- [ ] Signature update service (signed feeds)
+- [x] Signed signature-feed update service (Ed25519, expiry + replay protection)
+- [ ] On-access scanning for macOS/Windows endpoints
 - [ ] Behavioral detection (eBPF process telemetry)
 - [ ] Windows/macOS support; daemon mode + REST API
 - [ ] Web protection & browser integration

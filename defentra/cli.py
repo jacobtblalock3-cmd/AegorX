@@ -81,6 +81,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_mon.add_argument("--max-size-mb", type=int, default=512, help="skip files larger than this (MB)")
     p_mon.add_argument("--log", default=None, help="JSONL audit log path (default: <state>/realtime.log)")
 
+    p_keys = sub.add_parser("keys", help="signing key management")
+    keys_sub = p_keys.add_subparsers(dest="keys_command")
+    k_gen = keys_sub.add_parser("generate", help="create an Ed25519 signing keypair (feed publishers)")
+    k_gen.add_argument("--out", default=None, help="output directory (default: <state>/signing)")
+    k_trust = keys_sub.add_parser("trust", help="install a public key into your trust store")
+    k_trust.add_argument("pubkey", help="path to a PEM Ed25519 public key")
+    keys_sub.add_parser("list", help="list trusted public keys")
+
+    p_feed = sub.add_parser("feed", help="signed signature-feed operations")
+    feed_sub = p_feed.add_subparsers(dest="feed_command")
+    f_sign = feed_sub.add_parser("sign", help="sign a feed document (publishers)")
+    f_sign.add_argument("file", help="unsigned feed JSON")
+    f_sign.add_argument("--key", required=True, help="Ed25519 private key PEM")
+    f_sign.add_argument("--out", default=None, help="write signed feed here (default: <file>.signed.json)")
+    f_verify = feed_sub.add_parser("verify", help="verify a signed feed against trusted keys")
+    f_verify.add_argument("file", help="signed feed JSON")
+    f_update = feed_sub.add_parser("update", help="download, verify, and apply signature updates")
+    src = f_update.add_mutually_exclusive_group()
+    src.add_argument("--url", default=None, help="feed URL (default: official release asset)")
+    src.add_argument("--file", dest="feed_file", default=None, help="apply from a local signed feed file")
+    f_update.add_argument("--db", default=None, help="path to signature database")
+    f_update.add_argument("--force", action="store_true", help="apply even if not newer than last update")
+    f_update.add_argument("--allow-expired", action="store_true", help="accept feeds past their expiry")
+
     return parser
 
 
@@ -254,6 +278,116 @@ def cmd_monitor(args) -> int:
     return exit_code
 
 
+def cmd_keys(args) -> int:
+    from defentra.signing.keys import (
+        default_signing_dir,
+        generate_keypair,
+        load_public_key,
+        public_key_fingerprint,
+        trust_public_key,
+        trusted_key_paths,
+    )
+
+    if args.keys_command == "generate":
+        private_path, public_path = generate_keypair(args.out or default_signing_dir())
+        print(f"private key: {private_path} (keep secret, mode 0600)")
+        print(f"public key:  {public_path}")
+        print("distribute the public key; users install it with 'defentra keys trust'")
+        return 0
+    if args.keys_command == "trust":
+        try:
+            installed = trust_public_key(args.pubkey)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        print(f"trusted key installed at {installed}")
+        return 0
+    if args.keys_command == "list":
+        paths = trusted_key_paths()
+        if not paths:
+            print("no trusted keys installed")
+            return 0
+        for path in paths:
+            origin = "package" if "/trusted_keys/" in path else "user"
+            try:
+                fp = public_key_fingerprint(load_public_key(path))
+            except Exception:
+                fp = "unreadable"
+            print(f"{fp}  [{origin}]  {path}")
+        return 0
+    print("no keys subcommand given; use: generate | trust | list", file=sys.stderr)
+    return EXIT_ERROR
+
+
+def cmd_feed(args) -> int:
+    from defentra.signatures.db import SignatureDB
+    from defentra.signing.feed import (
+        DEFAULT_FEED_URL,
+        FeedError,
+        apply_feed,
+        check_expiry,
+        check_replay,
+        fetch_feed,
+        load_feed,
+        record_applied,
+        sign_document,
+        save_feed,
+        verify_document,
+    )
+
+    if args.feed_command == "sign":
+        try:
+            doc = load_feed(args.file)
+            signed = sign_document(doc, args.key)
+            out = save_feed(signed, args.out or (args.file + ".signed.json"))
+        except (FeedError, OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        print(f"signed feed written to {out} ({len(signed.get('signatures', []))} signature(s))")
+        return 0
+
+    if args.feed_command == "verify":
+        try:
+            doc = load_feed(args.file)
+            fingerprint = verify_document(doc)
+            check_expiry(doc)
+        except FeedError as exc:
+            print(f"INVALID: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        print(
+            f"valid (key {fingerprint}, generated {doc.get('generated_utc')}, "
+            f"{len(doc.get('signatures', []))} signature(s), expires {doc.get('expires_utc')})"
+        )
+        return 0
+
+    if args.feed_command == "update":
+        try:
+            if args.feed_file:
+                doc = load_feed(args.feed_file)
+                source_desc = args.feed_file
+            else:
+                doc = fetch_feed(args.url or DEFAULT_FEED_URL)
+                source_desc = args.url or DEFAULT_FEED_URL
+            fingerprint = verify_document(doc)
+            check_expiry(doc, allow_expired=args.allow_expired)
+            if not check_replay(doc, force=args.force):
+                print(f"feed is not newer than the last applied update; use --force to override")
+                return EXIT_CLEAN
+            db = SignatureDB(getattr(args, "db", None))
+            added = apply_feed(db, doc)
+            record_applied(doc)
+        except FeedError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        print(
+            f"feed verified (key {fingerprint}); applied {added} new signature(s) "
+            f"from {source_desc}; total={db.count()}"
+        )
+        return EXIT_CLEAN
+    print("no feed subcommand given; use: sign | verify | update", file=sys.stderr)
+    return EXIT_ERROR
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -266,6 +400,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         "quarantine": cmd_quarantine,
         "model": cmd_model,
         "monitor": cmd_monitor,
+        "keys": cmd_keys,
+        "feed": cmd_feed,
     }
     handler = handlers.get(args.command)
     if handler is None:
