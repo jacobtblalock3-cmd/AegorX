@@ -46,7 +46,7 @@ def test_inotify_backend_reports_available():
 @root_only
 def test_fanotify_denies_malicious_open(engine, tmp_path):
     """Hard-bounded: any stall self-reports its stack after 75s."""
-    faulthandler.dump_traceback_later(75, exit=True)
+    faulthandler.dump_traceback_later(75, exit=True, file=sys.__stderr__)
     try:
         _fanotify_deny_body(engine, tmp_path)
     finally:
