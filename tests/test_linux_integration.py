@@ -45,90 +45,66 @@ def test_inotify_backend_reports_available():
 @linux_only
 @root_only
 def test_fanotify_denies_malicious_open(engine, tmp_path):
-    """Hard-bounded: any stall self-reports its stack after 75s."""
-    faulthandler.dump_traceback_later(75, exit=True, file=sys.__stderr__)
-    try:
-        _fanotify_deny_body(engine, tmp_path)
-    finally:
-        faulthandler.cancel_dump_traceback_later()
-
-
-def _fanotify_deny_body(engine, tmp_path):
+    """Minimal blocking-open proof: EICAR open must fail with EPERM."""
+    faulthandler.dump_traceback_later(110, exit=True, file=sys.__stderr__)
     from defentra.realtime.fanotify_backend import FanotifyBackend
 
     if not FanotifyBackend.available():
         pytest.skip("fanotify unavailable")
+
     watch = tmp_path / "watch"
     watch.mkdir()
     target = watch / "eicar.com"
     target.write_text(EICAR)
+    benign = watch / "benign.txt"
+    benign.write_text("hello")
 
     decisions = []
 
     def decide(event):
+        verdict = None
         try:
             verdict = engine.scan_file(event.path).verdict
-        except Exception as exc:  # pragma: no cover - diagnostic path
-            decisions.append(("error", str(exc)))
+        except Exception as exc:
+            decisions.append(("scan-error", str(exc)[:120]))
+            print(f"[fanotify-test] scan error: {exc}", flush=True)
             return True
         decisions.append((event.path, verdict))
+        print(f"[fanotify-test] decide {event.path} -> {verdict}", flush=True)
         return verdict != "malicious"
 
     backend = FanotifyBackend([str(watch)], excludes=[os.environ["DEFENTRA_HOME"] + "*"])
     backend.decide = decide
+    print("[fanotify-test] starting backend", flush=True)
     backend.start()
-    time.sleep(0.5)
+    print("[fanotify-test] backend started; opening benign file", flush=True)
 
-    # Phase 1: prove event delivery with a benign open before asserting denial.
-    # The probe runs in its own thread because, if the kernel never delivers
-    # the permission event, os.open() itself blocks until the kernel timeout.
-    benign = watch / "benign.txt"
-    benign.write_text("hello")
-    probe_result = {"opened": False}
-
-    def probe():
+    try:
+        benign_open_ok = None
         try:
             fd = os.open(str(benign), os.O_RDONLY)
             os.close(fd)
-            probe_result["opened"] = True
-        except OSError:
-            pass
-
-    probe_thread = threading.Thread(target=probe, daemon=True)
-    probe_thread.start()
-    probe_thread.join(timeout=4)
-    if backend.counters["events"] == 0:
-        backend.stop()
-        pytest.skip(
-            "runner kernel does not deliver fanotify permission events for dir marks"
+            benign_open_ok = True
+        except PermissionError:
+            benign_open_ok = False
+        print(
+            f"[fanotify-test] benign opened={benign_open_ok} counters={backend.counters}",
+            flush=True,
         )
+        if backend.counters["events"] == 0:
+            pytest.skip("kernel did not deliver permission events for dir marks")
+        assert benign_open_ok, "benign file must remain readable"
 
-    try:
-        outcome = {"denied": 0, "allowed": 0}
-
-        def opener():
-            deadline = time.time() + 10
-            while time.time() < deadline:
-                try:
-                    fd = os.open(str(target), os.O_RDONLY)
-                    os.close(fd)
-                    outcome["allowed"] += 1
-                    time.sleep(0.1)
-                except PermissionError:
-                    outcome["denied"] += 1
-                    return
-                except OSError as exc:
-                    outcome.setdefault("os_errors", []).append(str(exc))
-                    time.sleep(0.05)
-
-        thread = threading.Thread(target=opener)
-        thread.start()
-        thread.join(timeout=20)
-        assert outcome["denied"] >= 1, (
-            f"expected fanotify deny; outcome={outcome} decisions={decisions}"
-            f" counters={backend.counters}"
-        )
-        assert any(v == "malicious" for _, v in decisions if isinstance(v, str)), decisions
+        try:
+            fd = os.open(str(target), os.O_RDONLY)
+            os.close(fd)
+            denied = False
+        except PermissionError:
+            denied = True
+        elapsed_notes = f"counters={backend.counters} decisions={decisions}"
+        print(f"[fanotify-test] eicar denied={denied} {elapsed_notes}", flush=True)
+        assert denied, f"EICAR open was allowed: {elapsed_notes}"
+        assert backend.counters["denied"] >= 1
     finally:
         backend.stop()
 
