@@ -54,11 +54,23 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     target = watch / "eicar.com"
     target.write_text(EICAR)
 
+    decisions = []
+
+    def decide(event):
+        try:
+            verdict = engine.scan_file(event.path).verdict
+        except Exception as exc:  # pragma: no cover - diagnostic path
+            decisions.append(("error", str(exc)))
+            return True
+        decisions.append((event.path, verdict))
+        return verdict != "malicious"
+
     backend = FanotifyBackend([str(watch)], excludes=[os.environ["DEFENTRA_HOME"] + "*"])
-    backend.decide = lambda event: engine.scan_file(event.path).verdict != "malicious"
+    backend.decide = decide
     backend.start()
+    time.sleep(0.5)
     try:
-        outcome = {}
+        outcome = {"denied": 0, "allowed": 0}
 
         def opener():
             deadline = time.time() + 10
@@ -66,18 +78,22 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
                 try:
                     fd = os.open(str(target), os.O_RDONLY)
                     os.close(fd)
-                    return  # allowed this time; retry in case event pending
+                    outcome["allowed"] += 1
+                    time.sleep(0.1)
                 except PermissionError:
-                    outcome["denied"] = True
+                    outcome["denied"] += 1
                     return
-                except OSError:
+                except OSError as exc:
+                    outcome.setdefault("os_errors", []).append(str(exc))
                     time.sleep(0.05)
-            outcome["timeout"] = True
 
         thread = threading.Thread(target=opener)
         thread.start()
-        thread.join(timeout=15)
-        assert outcome.get("denied"), f"expected fanotify deny, got {outcome}"
+        thread.join(timeout=20)
+        assert outcome["denied"] >= 1, (
+            f"expected fanotify deny; outcome={outcome} decisions={decisions}"
+        )
+        assert any(v == "malicious" for _, v in decisions if isinstance(v, str)), decisions
     finally:
         backend.stop()
 
