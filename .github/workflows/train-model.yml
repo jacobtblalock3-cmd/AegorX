@@ -6,7 +6,7 @@ on:
       dataset_url:
         description: "EMBER 2018 dataset tarball URL"
         required: false
-        default: "https://pubdata.endgame.com/ember/ember_dataset.tar.bz2"
+        default: "https://ember.elastic.co/ember_dataset.tar.bz2"
       rounds:
         description: "LightGBM boosting rounds"
         required: false

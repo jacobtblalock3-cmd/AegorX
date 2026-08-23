@@ -3,7 +3,7 @@
 
 Downloads are NOT handled here; fetch the dataset first:
 
-    curl -LO https://pubdata.endgame.com/ember/ember_dataset.tar.bz2
+    curl -LO https://ember.elastic.co/ember_dataset.tar.bz2
     tar -xjf ember_dataset.tar.bz2        # -> ember2018/{train,test}.jsonl
 
 Then:

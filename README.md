@@ -139,7 +139,7 @@ For the full-scale reference model, trigger **Actions -> Train reference model**
 checksummed release artifact), or run it yourself:
 
 ```bash
-curl -LO https://pubdata.endgame.com/ember/ember_dataset.tar.bz2
+curl -LO https://ember.elastic.co/ember_dataset.tar.bz2
 tar -xjf ember_dataset.tar.bz2
 python scripts/train_ember.py \
     --train ember2018/train.jsonl --test ember2018/test.jsonl --out-dir models/release
