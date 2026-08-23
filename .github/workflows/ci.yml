@@ -35,10 +35,14 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: pip install -e ".[yara]"
+      - name: Install test deps for root
+        run: |
+          sudo "$(which python)" -m pip install --quiet pytest yara-python
       - name: Realtime kernel integration tests (as root)
         env:
           DEFENTRA_HOME: /tmp/defentra-integration
         run: |
+          cd "$(pwd)"
           sudo --preserve-env=DEFENTRA_HOME "$(which python)" -m pytest tests/test_linux_integration.py -v
 
   security:
