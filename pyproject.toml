@@ -11,6 +11,7 @@ requires-python = ">=3.9"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Defentra Project" }]
 keywords = ["antivirus", "security", "malware", "yara", "machine-learning"]
+dependencies = ["cryptography>=41.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -27,7 +28,6 @@ Homepage = "https://github.com/defentra/defentra"
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
 ml = ["lightgbm>=4.0", "numpy>=1.23"]
-quarantine = ["cryptography>=41.0"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]
