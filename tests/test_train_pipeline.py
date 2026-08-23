@@ -124,3 +124,11 @@ def test_meta_thresholds_present(tmp_path):
         str(train), str(test), str(tmp_path / "out"), rounds=1, model_factory=lambda p: FakeModel(p)
     )
     assert meta["thresholds"]["malicious"] == 0.85
+
+
+def test_iter_xy_rejects_precomputed_vectors(tmp_path):
+    vec_file = tmp_path / "train_features_0.jsonl"
+    with open(vec_file, "w") as fh:
+        fh.write(json.dumps({"x": [0.1] * 2351, "y": 1}) + "\n")
+    with pytest.raises(te.RawRecordsRequiredError, match="PRECOMPUTED"):
+        te.iter_xy(str(vec_file))

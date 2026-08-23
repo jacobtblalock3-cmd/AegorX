@@ -4,6 +4,31 @@ Defentra's out-of-the-box ML detection ships as a **release artifact**, not in
 git: LightGBM binaries do not belong in version control and users should always
 be able to verify what they download.
 
+## Dataset availability (important)
+
+Defentra trains on **raw** EMBER 2018 records (JSONL with
+`general`/`header`/`section`/`imports` fields) so that training features are
+identical to what the runtime extractor computes at scan time.
+
+As of August 2026, the original raw archive is no longer served by its primary
+hosts:
+
+| Source | Status |
+|---|---|
+| `pubdata.endgame.com/ember/ember_dataset.tar.bz2` | dead (domain retired) |
+| `data.srimmer.xyz/ember/ember_dataset.tar.bz2` | dead |
+| `ember.elastic.co/ember_dataset.tar.bz2` | serves **precomputed 2351-dim vectors only** (`train_features_*.jsonl`) — NOT trainable by Defentra |
+
+The trainer and CI workflow detect vector-only inputs and fail with a clear
+message instead of training a model that could never be loaded at runtime.
+
+To run the training workflow, supply a raw-format archive via the
+`dataset_url` dispatch input. Known acquisition paths for the raw records:
+Kaggle mirrors of EMBER 2018 (requires Kaggle account), Academic Torrents,
+or re-hosting an archived copy of the original tarball. If you operate a
+public mirror of the raw dataset, open an issue/PR and we will point the
+default workflow input at it.
+
 ## How the reference model is produced
 
 1. Trigger **Actions -> Train reference model** (workflow_dispatch) on GitHub.

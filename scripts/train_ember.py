@@ -36,10 +36,26 @@ MODEL_FILENAME = "malware-ember.lgbm"
 META_SUFFIX = ".meta.json"
 
 
+class RawRecordsRequiredError(RuntimeError):
+    pass
+
+
+def _check_raw_format(record: dict) -> None:
+    if "x" in record and "label" not in record:
+        raise RawRecordsRequiredError(
+            "input contains EMBER PRECOMPUTED feature vectors ('x' key). Defentra "
+            "trains on RAW EMBER records (general/header/section/imports fields) "
+            "so that training features match the runtime extractor. The elastic.co "
+            "mirror serves vector-only archives; see models/README.md for sources "
+            "of the original raw dataset."
+        )
+
+
 def iter_xy(path: str, max_per_class: Optional[int] = None) -> Tuple[List[List[float]], List[int], Dict[str, int]]:
     counts = {"benign": 0, "malicious": 0}
     X: List[List[float]] = []
     y: List[int] = []
+    checked = False
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.strip()
@@ -49,6 +65,9 @@ def iter_xy(path: str, max_per_class: Optional[int] = None) -> Tuple[List[List[f
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not checked and isinstance(record, dict):
+                _check_raw_format(record)
+                checked = True
             label = parse_label(record.get("label"))
             if label is None:
                 continue

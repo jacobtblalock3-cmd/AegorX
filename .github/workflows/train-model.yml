@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       dataset_url:
-        description: "EMBER 2018 dataset tarball URL"
+        description: "URL of a RAW EMBER 2018 archive (must contain train/test JSONL records; vector-only mirrors are not trainable)"
         required: false
         default: "https://ember.elastic.co/ember_dataset.tar.bz2"
       rounds:
@@ -31,12 +31,24 @@ jobs:
           curl -fSL --retry 3 -o ember.tar.bz2 "${{ github.event.inputs.dataset_url }}"
           mkdir ember
           tar -xjf ember.tar.bz2 -C ember
-          find ember -name '*.jsonl' -exec ls -lh {} \;
+          find ember -type f -name '*.jsonl' -exec ls -lh {} \;
+
+      - name: Locate raw train/test splits
+        run: |
+          TRAIN=$(find ember -type f -name 'train*.jsonl' ! -name '*features*' | head -1)
+          TEST=$(find ember -type f -name 'test*.jsonl' ! -name '*features*' | head -1)
+          if [ -z "$TRAIN" ] || [ -z "$TEST" ]; then
+            echo "::error::No RAW EMBER record files (train*.jsonl / test*.jsonl) in the archive."
+            echo "::error::Vector-only mirrors (e.g. ember.elastic.co train_features_*) are NOT trainable by Defentra."
+            echo "::error::See models/README.md for sources of the original raw dataset, or pass a"
+            echo "::error::dataset_url workflow input pointing at a raw archive."
+            exit 1
+          fi
+          echo "TRAIN=$TRAIN" >> "$GITHUB_ENV"
+          echo "TEST=$TEST" >> "$GITHUB_ENV"
 
       - name: Train
         run: |
-          TRAIN=$(find ember -name 'train.jsonl' | head -1)
-          TEST=$(find ember -name 'test.jsonl' | head -1)
           python scripts/train_ember.py \
             --train "$TRAIN" --test "$TEST" \
             --out-dir artifacts \
