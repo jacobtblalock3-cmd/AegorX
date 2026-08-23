@@ -186,6 +186,8 @@ class RealTimeMonitor:
         self._stats_lock = threading.Lock()
         self._stop_evt = threading.Event()
         self._started_at = 0.0
+        self.backend.on_event = self._dispatch
+        self.backend.decide = self._decide_open
 
     @property
     def backend_name(self) -> str:
@@ -195,8 +197,6 @@ class RealTimeMonitor:
         if self.log_path:
             parent = os.path.dirname(os.path.abspath(self.log_path))
             os.makedirs(parent, exist_ok=True)
-        self.backend.on_event = self._dispatch
-        self.backend.decide = self._decide_open
         self.backend.start()
         self._started_at = time.time()
         print(
