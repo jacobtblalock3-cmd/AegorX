@@ -1,7 +1,7 @@
 # Defentra
 
 **Open-source AI-assisted antivirus engine** — the flagship project of the Defentra
-cybersecurity suite. Linux-first, with a Python scan core and a Rust performance layer.
+cybersecurity suite. Linux first program, with a Python scan core and a Rust performance layer.
 
 ```
 $ defentra scan ./suspicious-downloads/
