@@ -17,6 +17,13 @@ class NotElfError(ValueError):
 def parse_elf(data: bytes) -> Dict:
     if len(data) < 64 or data[:4] != b"\x7fELF":
         raise NotElfError("missing ELF magic")
+    try:
+        return _parse_elf_inner(data)
+    except struct.error as exc:
+        raise NotElfError(f"truncated ELF structure: {exc}") from exc
+
+
+def _parse_elf_inner(data: bytes) -> Dict:
     ei_class = data[4]
     ei_data = data[5]
     if ei_class not in (1, 2):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import stat
 
 DEFAULT_STATE_DIR = os.path.join(os.path.expanduser("~"), ".defentra")
 MAX_HASH_FILE_SIZE = 2 * 1024 * 1024 * 1024
@@ -13,6 +14,19 @@ CHUNK_SIZE = 1024 * 1024
 def state_dir() -> str:
     override = os.environ.get("DEFENTRA_HOME")
     return override if override else DEFAULT_STATE_DIR
+
+
+def ensure_state_dir() -> str:
+    """Create the state directory with owner-only permissions (0700)."""
+    path = state_dir()
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    try:
+        current = stat.S_IMODE(os.stat(path).st_mode)
+        if current & 0o077:
+            os.chmod(path, 0o700)
+    except OSError:
+        pass
+    return path
 
 
 def ensure_dir(path: str) -> str:

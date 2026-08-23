@@ -182,6 +182,27 @@ Defentra is in early alpha. It is **not yet a replacement** for a mature
 commercial endpoint product. Always test against the
 [EICAR](https://www.eicar.org) standard before trusting any AV deployment.
 
+## Security posture
+
+See [SECURITY.md](SECURITY.md) for the full threat model and disclosure
+policy. Highlights:
+
+- **Signed updates everywhere**: signature feeds *and* ML model metadata are
+  Ed25519-signed against keys pinned inside the package; downloads are
+  HTTPS-only, size-capped, checksum-verified, and replay/expiry protected.
+- **Crash-safe parsing**: PE/ELF parsers are fuzz-tested — hostile binaries
+  yield clean error verdicts, never crashes (a scanner crash is a DoS vector).
+- **Hardened quarantine**: strict blob-name validation blocks path traversal,
+  `O_NOFOLLOW` on all writes, 0700 state dir / 0600 blobs / key stored apart,
+  atomic index updates, chunked encryption to bound memory.
+- **Tamper-evident audit log**: realtime events land in a hash-chained JSONL
+  (`defentra audit verify`), with rotation.
+- **Terminal-escape-safe output**: malicious filenames cannot control your
+  terminal via ANSI sequences.
+- **Supply chain**: CI runs tests on Python 3.9–3.13 plus bandit SAST,
+  pip-audit dependency scanning, and secrets pattern scanning; GitHub Actions
+  are pinned by commit SHA; Dependabot watches Actions and pip.
+
 ## License
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).

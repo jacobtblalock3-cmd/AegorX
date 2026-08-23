@@ -105,6 +105,11 @@ def build_parser() -> argparse.ArgumentParser:
     f_update.add_argument("--force", action="store_true", help="apply even if not newer than last update")
     f_update.add_argument("--allow-expired", action="store_true", help="accept feeds past their expiry")
 
+    p_audit = sub.add_parser("audit", help="audit log operations")
+    audit_sub = p_audit.add_subparsers(dest="audit_command")
+    a_verify = audit_sub.add_parser("verify", help="verify the hash chain of a realtime audit log")
+    a_verify.add_argument("log", nargs="?", default=None, help="audit log path (default: <state>/realtime.log)")
+
     return parser
 
 
@@ -388,6 +393,24 @@ def cmd_feed(args) -> int:
     return EXIT_ERROR
 
 
+def cmd_audit(args) -> int:
+    from defentra.realtime.monitor import verify_audit_log
+
+    if not getattr(args, "audit_command", None):
+        print("no audit subcommand given; use: verify", file=sys.stderr)
+        return EXIT_ERROR
+    log_path = getattr(args, "log", None) or os.path.join(state_dir(), "realtime.log")
+    ok, seq = verify_audit_log(log_path)
+    if not os.path.exists(log_path):
+        print(f"error: no audit log at {log_path}", file=sys.stderr)
+        return EXIT_ERROR
+    if ok:
+        print(f"audit chain intact through record {seq}: {log_path}")
+        return EXIT_CLEAN
+    print(f"TAMPERED: audit chain broken at or after record {seq + 1} in {log_path}", file=sys.stderr)
+    return EXIT_MALICIOUS
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -402,6 +425,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "monitor": cmd_monitor,
         "keys": cmd_keys,
         "feed": cmd_feed,
+        "audit": cmd_audit,
     }
     handler = handlers.get(args.command)
     if handler is None:

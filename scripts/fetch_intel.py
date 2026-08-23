@@ -147,6 +147,8 @@ def parse_urlhaus(payload: dict) -> List[Dict]:
 
 
 def http_post_json(url: str, fields: Dict[str, str], opener=None) -> dict:
+    if not url.lower().startswith("https://"):
+        raise IntelSourceError(f"refusing non-HTTPS intel URL: {url}")
     opener = opener or urllib.request.urlopen
     body = urllib.parse.urlencode(fields).encode()
     request = urllib.request.Request(

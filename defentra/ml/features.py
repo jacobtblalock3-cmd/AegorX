@@ -126,7 +126,7 @@ def extract_features(path: str) -> Dict[str, float]:
         from defentra.utils import shannon_entropy as _se
 
         for off, span in elf["progbits_spans"][:64]:
-            blob = data[off : off + min(span, 4 * 1024 * 1024)]
+            blob = data[off : off + min(span, 1024 * 1024)]
             if blob:
                 ents.append(_se(blob))
         if ents:

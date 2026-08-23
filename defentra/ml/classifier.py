@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import os
 from typing import Dict, Optional
@@ -65,16 +66,37 @@ class MalwareClassifier:
         for path in candidates:
             if path and os.path.isfile(path):
                 try:
+                    self._verify_integrity(path)
                     self._booster = lgb.Booster(model_file=path)
                     n_feat = self._booster.num_feature()
                     if n_feat != len(FEATURE_NAMES):
                         self._booster = None
                         continue
                     self._model_path = path
+                    self.metadata = {}
                     self._load_meta(path)
                     return
                 except Exception:
+                    self._booster = None
                     continue
+
+    @staticmethod
+    def _verify_integrity(path: str) -> None:
+        """Refuse models whose sibling metadata records a different sha256."""
+        meta_path = path + META_SUFFIX
+        if not os.path.exists(meta_path):
+            return
+        with open(meta_path, "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        expected = meta.get("model_sha256") if isinstance(meta, dict) else None
+        if not expected:
+            return
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        if h.hexdigest() != expected:
+            raise ValueError("model file does not match its published checksum")
 
     def _load_meta(self, model_path: str) -> None:
         meta_path = model_path + META_SUFFIX

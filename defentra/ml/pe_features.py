@@ -44,6 +44,13 @@ class NotPEError(ValueError):
 def parse_pe(data: bytes) -> Dict:
     if len(data) < 64 or data[:2] != b"MZ":
         raise NotPEError("missing MZ header")
+    try:
+        return _parse_pe_inner(data)
+    except struct.error as exc:
+        raise NotPEError(f"truncated PE structure: {exc}") from exc
+
+
+def _parse_pe_inner(data: bytes) -> Dict:
     e_lfanew = struct.unpack_from("<I", data, 0x3C)[0]
     if e_lfanew + 24 > len(data) or data[e_lfanew : e_lfanew + 4] != b"PE\x00\x00":
         raise NotPEError("missing PE signature")
@@ -65,7 +72,10 @@ def parse_pe(data: bytes) -> Dict:
     size_of_image = struct.unpack_from("<I", data, opt_off + 56)[0]
     subsystem = struct.unpack_from("<H", data, opt_off + 68)[0]
     dll_characteristics = struct.unpack_from("<H", data, opt_off + 70)[0]
-    num_dirs = min(struct.unpack_from("<I", data, opt_off + 92)[0], 16)
+    num_dirs_raw = struct.unpack_from("<I", data, opt_off + 92)[0]
+    num_dirs = min(num_dirs_raw, 16)
+    if opt_off + 96 + num_dirs * 8 > len(data):
+        num_dirs = max(0, (len(data) - opt_off - 96) // 8)
 
     dirs = []
     for i in range(num_dirs):
@@ -198,6 +208,6 @@ def section_entropies(data: bytes, sections) -> List[float]:
         if start >= len(data) or size == 0:
             entropies.append(0.0)
             continue
-        blob = data[start : start + min(size, 4 * 1024 * 1024)]
+        blob = data[start : start + min(size, 1024 * 1024)]
         entropies.append(shannon_entropy(blob))
     return entropies

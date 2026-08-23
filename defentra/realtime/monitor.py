@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -18,6 +19,99 @@ from defentra.realtime.events import (
     PathFilter,
     RealtimeUnavailableError,
 )
+from defentra.report import sanitize
+
+
+class AuditLog:
+    """Append-only JSONL audit log with SHA256 hash chaining and size rotation.
+
+    Each record carries seq/prev/hash so any deletion or modification breaks
+    the chain detectably (verify_audit_log).
+    """
+
+    def __init__(self, path: str, max_bytes: int = 10 * 1024 * 1024, backups: int = 3):
+        self.path = os.path.abspath(path)
+        parent = os.path.dirname(self.path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        self.max_bytes = max_bytes
+        self.backups = backups
+        self._lock = threading.Lock()
+        self._seq = 0
+        self._prev_hash = ""
+        self._load_chain_state()
+
+    def _load_chain_state(self) -> None:
+        try:
+            with open(self.path, "rb") as fh:
+                for raw in fh:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        rec = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec.get("seq"), int) and rec.get("hash"):
+                        self._seq = max(self._seq, rec["seq"])
+                        self._prev_hash = rec["hash"]
+        except OSError:
+            pass
+
+    def _rotate(self) -> None:
+        if os.path.exists(self.path) and os.path.getsize(self.path) < self.max_bytes:
+            return
+        for i in range(self.backups - 1, 0, -1):
+            src, dst = f"{self.path}.{i}", f"{self.path}.{i + 1}"
+            if os.path.exists(src):
+                os.replace(src, dst)
+        if os.path.exists(self.path):
+            os.replace(self.path, f"{self.path}.1")
+
+    def write(self, record: dict) -> str:
+        line_hash = ""
+        with self._lock:
+            self._seq += 1
+            record = dict(record)
+            record["seq"] = self._seq
+            record["prev"] = self._prev_hash
+            payload = json.dumps(record, separators=(",", ":"), sort_keys=True)
+            line_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            record["hash"] = line_hash
+            self._rotate()
+            with open(self.path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, separators=(",", ":")) + "\n")
+            self._prev_hash = line_hash
+        return line_hash
+
+
+def verify_audit_log(path: str) -> tuple:
+    """Validate the full hash chain; returns (ok, first_broken_seq)."""
+    expected_prev = ""
+    expected_seq = 0
+    try:
+        fh = open(path, "r", encoding="utf-8")
+    except OSError:
+        return False, 0
+    with fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except json.JSONDecodeError:
+                return False, expected_seq + 1
+            stored_hash = rec.pop("hash", None)
+            if rec.get("prev") != expected_prev or rec.get("seq") != expected_seq + 1:
+                return False, rec.get("seq", expected_seq + 1)
+            payload = json.dumps(rec, separators=(",", ":"), sort_keys=True)
+            actual = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            if stored_hash != actual:
+                return False, rec.get("seq", expected_seq + 1)
+            expected_prev = stored_hash
+            expected_seq = rec["seq"]
+    return True, expected_seq
 
 
 def default_excludes() -> List[str]:
@@ -78,6 +172,8 @@ class RealTimeMonitor:
         self.filter = PathFilter(all_excludes)
         self.backend = select_backend(backend, self.paths, excludes=all_excludes)
         self.pool = ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="defentra-scan")
+        self._inflight = threading.BoundedSemaphore(max(16, workers * 4))
+        self.audit = AuditLog(log_path) if log_path else None
         self.stats: Dict[str, int] = {
             "received": 0,
             "scanned": 0,
@@ -88,7 +184,6 @@ class RealTimeMonitor:
             "skipped": 0,
         }
         self._stats_lock = threading.Lock()
-        self._log_lock = threading.Lock()
         self._stop_evt = threading.Event()
         self._started_at = 0.0
 
@@ -154,9 +249,20 @@ class RealTimeMonitor:
                 return
         except OSError:
             return
+        if not self._inflight.acquire(blocking=False):
+            self._bump("skipped")
+            if self.audit is not None:
+                self._log({"ts": time.time(), "path": sanitize(path), "kind": event.kind, "dropped": "queue_saturated"})
+            return
         self.pool.submit(self._process, event)
 
     def _process(self, event: FileEvent) -> None:
+        try:
+            self._process_inner(event)
+        finally:
+            self._inflight.release()
+
+    def _process_inner(self, event: FileEvent) -> None:
         result = self._scan_and_log(event)
         if result is None:
             return
@@ -170,13 +276,13 @@ class RealTimeMonitor:
                     self._bump("quarantined")
             names = ", ".join(d.name for d in result.detections) or "ml"
             print(
-                f"[THREAT] {event.path} ({names}) -> {action}",
+                f"[THREAT] {sanitize(event.path)} ({names}) -> {action}",
                 flush=True,
             )
         elif result.verdict == "suspicious":
             self._bump("suspicious")
             names = ", ".join(d.name for d in result.detections) or "ml"
-            print(f"[suspicious] {event.path} ({names})", flush=True)
+            print(f"[suspicious] {sanitize(event.path)} ({names})", flush=True)
 
     def _decide_open(self, event: FileEvent) -> bool:
         result = self._scan_and_log(event)
@@ -185,7 +291,7 @@ class RealTimeMonitor:
         if result.verdict == "malicious":
             self._bump("malicious")
             names = ", ".join(d.name for d in result.detections) or "ml"
-            print(f"[BLOCKED] {event.path} ({names}) open denied", flush=True)
+            print(f"[BLOCKED] {sanitize(event.path)} ({names}) open denied", flush=True)
             if self.quarantine_enabled:
                 entry = self._try_quarantine(event.path, result)
                 if entry:
@@ -239,9 +345,5 @@ class RealTimeMonitor:
             return None
 
     def _log(self, record: dict) -> None:
-        if not self.log_path:
-            return
-        line = json.dumps(record, separators=(",", ":"))
-        with self._log_lock:
-            with open(self.log_path, "a", encoding="utf-8") as fh:
-                fh.write(line + "\n")
+        if self.audit is not None:
+            self.audit.write(record)

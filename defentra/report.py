@@ -19,6 +19,17 @@ COLORS = {
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
+_CONTROL_RE = __import__("re").compile(r"[\x00-\x1f\x7f]")
+
+
+def sanitize(text: str) -> str:
+    """Neutralize control/ANSI escape sequences from untrusted strings.
+
+    Malicious files can carry terminal-escape sequences in their names;
+    rendering them raw would let the file control the user's terminal.
+    """
+    return _CONTROL_RE.sub("?", str(text))
+
 
 def to_dict(results: List[FileScanResult], target: str, elapsed: float) -> dict:
     files = []
@@ -73,15 +84,15 @@ def render_text(results: List[FileScanResult], target: str, elapsed: float, colo
             flagged += 1
             c = COLORS.get(r.verdict, "") if color else ""
             lines.append("")
-            lines.append(f"  {c}[{r.verdict.upper()}]{RESET if color else ''} {r.path}")
-            lines.append(f"    sha256 : {r.sha256}")
+            lines.append(f"  {c}[{r.verdict.upper()}]{RESET if color else ''} {sanitize(r.path)}")
+            lines.append(f"    sha256 : {sanitize(r.sha256)}")
             lines.append(f"    size   : {r.size} bytes")
             if r.ml_probability is not None:
                 lines.append(f"    ml     : {r.ml_probability:.3f} malware probability")
             for d in r.detections:
-                lines.append(f"    hit    : [{d.detector}] {d.name} (severity {d.severity})")
+                lines.append(f"    hit    : [{sanitize(d.detector)}] {sanitize(d.name)} (severity {d.severity})")
         elif r.verdict == "error":
-            lines.append(f"\n  [ERROR] {r.path}: {r.error}")
+            lines.append(f"\n  [ERROR] {sanitize(r.path)}: {sanitize(r.error)}")
 
     summary = {"clean": 0, "suspicious": 0, "malicious": 0, "error": 0}
     for r in results:

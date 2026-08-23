@@ -180,7 +180,10 @@ class FanotifyBackend(BackendBase):
                     path = self._path_of(fd)
                     event = FileEvent(path=path, kind="open_perm", pid=meta["pid"])
                     if self.decide is not None:
-                        allowed = bool(self.decide(event))
+                        try:
+                            allowed = bool(self.decide(event))
+                        except Exception:
+                            allowed = True
             except OSError:
                 allowed = True
             self._respond(fd, allowed)

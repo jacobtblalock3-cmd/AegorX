@@ -150,7 +150,13 @@ def default_params(rounds: int) -> Dict:
     }
 
 
-def write_meta(out_dir: str, test_auc: float, counts_train: Dict, counts_test: Dict) -> Dict:
+def write_meta(
+    out_dir: str,
+    test_auc: float,
+    counts_train: Dict,
+    counts_test: Dict,
+    sign_key_path: Optional[str] = None,
+) -> Dict:
     model_path = os.path.join(out_dir, MODEL_FILENAME)
     meta = {
         "format": "defentra-model-meta",
@@ -166,6 +172,14 @@ def write_meta(out_dir: str, test_auc: float, counts_train: Dict, counts_test: D
         "test_auc": round(test_auc, 6),
         "thresholds": {"malicious": 0.85, "suspicious": 0.60},
     }
+    if sign_key_path:
+        from defentra.signing.keys import load_private_key
+
+        key = load_private_key(sign_key_path)
+        payload = json.dumps(meta, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        import base64
+
+        meta["signature"] = base64.b64encode(key.sign(payload)).decode("ascii")
     meta_path = os.path.join(out_dir, MODEL_FILENAME + META_SUFFIX)
     with open(meta_path, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2)
@@ -182,6 +196,7 @@ def run_training(
     rounds: int = 300,
     max_per_class: Optional[int] = None,
     model_factory: Optional[Callable[[Dict], object]] = None,
+    sign_key_path: Optional[str] = None,
 ) -> Dict:
     import numpy as np
 
@@ -208,7 +223,7 @@ def run_training(
     model.save_model(model_path)
     print(f"[+] saved {model_path}")
 
-    meta = write_meta(out_dir, auc, counts_train, counts_test)
+    meta = write_meta(out_dir, auc, counts_train, counts_test, sign_key_path=sign_key_path)
     print(f"[+] wrote metadata ({meta['num_features']} features, sha256={meta['model_sha256'][:16]}...)")
     print(f"[+] publish: attach as release asset named 'defentra-ember-reference.lgbm'")
     return meta
@@ -221,10 +236,18 @@ def main() -> int:
     parser.add_argument("--out-dir", default="models/release")
     parser.add_argument("--rounds", type=int, default=300)
     parser.add_argument("--max-per-class", type=int, default=None, help="cap samples per class (smoke tests)")
+    parser.add_argument("--sign-key", default=None, help="Ed25519 private key to sign the metadata sidecar")
     args = parser.parse_args()
 
     try:
-        run_training(args.train, args.test, args.out_dir, rounds=args.rounds, max_per_class=args.max_per_class)
+        run_training(
+            args.train,
+            args.test,
+            args.out_dir,
+            rounds=args.rounds,
+            max_per_class=args.max_per_class,
+            sign_key_path=args.sign_key,
+        )
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 3

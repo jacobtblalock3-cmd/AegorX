@@ -60,6 +60,27 @@ MAX_FUNCS_PER_DLL = 1024
 MAX_SECTIONS = 96
 
 
+def _as_float(value) -> float:
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def _as_dict(value) -> Dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value) -> List:
+    return value if isinstance(value, list) else []
+
+
 def _as_int(value) -> int:
     if isinstance(value, bool):
         return int(value)
@@ -77,7 +98,7 @@ def _as_int(value) -> int:
 
 def _flags_to_bits(names, table: Dict[str, int]) -> int:
     bits = 0
-    for name in names or []:
+    for name in _as_list(names):
         bits += table.get(str(name).upper(), 0)
     return bits
 
@@ -107,24 +128,27 @@ def _import_stats(imports: Dict):
     hits = 0
     total = 0
     dll_count = 0
-    for _dll, funcs in list(imports.items())[:MAX_DLLS]:
+    for _dll, funcs in list(_as_dict(imports).items())[:MAX_DLLS]:
         dll_count += 1
-        total += min(len(funcs), MAX_FUNCS_PER_DLL)
-        for func in list(funcs)[:MAX_FUNCS_PER_DLL]:
+        func_list = funcs if isinstance(funcs, (list, tuple)) else []
+        total += min(len(func_list), MAX_FUNCS_PER_DLL)
+        for func in list(func_list)[:MAX_FUNCS_PER_DLL]:
             if _is_suspicious(str(func)):
                 hits += 1
     return hits, total, dll_count
 
 
 def ember_record_to_features(record: Dict) -> Dict[str, float]:
+    if not isinstance(record, dict):
+        record = {}
     feats: Dict[str, float] = {name: 0.0 for name in FEATURE_NAMES}
-    general = record.get("general") or {}
-    header = record.get("header") or {}
-    coff = header.get("coff") or {}
-    optional = header.get("optional") or {}
-    sections = (record.get("section") or [])[:MAX_SECTIONS]
-    data_dirs = record.get("data_directories") or {}
-    overlay = record.get("overlay") or {}
+    general = _as_dict(record.get("general"))
+    header = _as_dict(record.get("header"))
+    coff = _as_dict(header.get("coff"))
+    optional = _as_dict(header.get("optional"))
+    sections = _as_list(record.get("section"))[:MAX_SECTIONS]
+    data_dirs = _as_dict(record.get("data_directories"))
+    overlay = _as_dict(record.get("overlay"))
 
     feats["file_size"] = float(min(_as_int(general.get("size")), 2**31))
     feats["is_pe"] = 1.0
@@ -151,8 +175,10 @@ def ember_record_to_features(record: Dict) -> Dict[str, float]:
     entropies: List[float] = []
     weights: List[float] = []
     for sec in sections:
-        entropies.append(float(sec.get("entropy", 0) or 0))
-        weights.append(float(sec.get("size", 0) or 0))
+        if not isinstance(sec, dict):
+            continue
+        entropies.append(min(max(_as_float(sec.get("entropy")), 0.0), 8.0))
+        weights.append(float(min(max(_as_int(sec.get("size") or 0), 0), 2**31)))
     if entropies:
         total_w = sum(weights)
         if total_w > 0:
@@ -164,7 +190,7 @@ def ember_record_to_features(record: Dict) -> Dict[str, float]:
         feats["pe_section_entropy_max"] = max(entropies)
         feats["pe_section_entropy_mean"] = sum(entropies) / len(entropies)
 
-    hits, total_funcs, dlls = _import_stats(record.get("imports") or {})
+    hits, total_funcs, dlls = _import_stats(_as_dict(record.get("imports")))
     feats["pe_suspicious_import_hits"] = float(hits)
     feats["pe_total_import_functions"] = float(total_funcs)
     feats["pe_num_import_dlls"] = float(dlls)

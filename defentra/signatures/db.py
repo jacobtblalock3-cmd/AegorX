@@ -38,11 +38,11 @@ CREATE INDEX IF NOT EXISTS idx_sig_sha1 ON hash_signatures(sha1);
 class SignatureDB:
     def __init__(self, path: Optional[str] = None):
         if path is None:
-            from defentra.utils import state_dir, ensure_dir
+            from defentra.utils import ensure_state_dir
 
-            path = os.path.join(ensure_dir(state_dir()), "signatures.db")
+            path = os.path.join(ensure_state_dir(), "signatures.db")
         fresh = not os.path.exists(path)
-        parent = os.path.dirname(path)
+        parent = os.path.dirname(os.path.abspath(path))
         if parent:
             os.makedirs(parent, exist_ok=True)
         self.conn = sqlite3.connect(path, check_same_thread=False)
@@ -50,6 +50,10 @@ class SignatureDB:
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self.conn.commit()
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
         if fresh:
             self.seed()
 

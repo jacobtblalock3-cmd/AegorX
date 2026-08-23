@@ -68,6 +68,13 @@ def canonical_payload(doc: Dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+def _safe_canonical(doc) -> bytes:
+    try:
+        return canonical_payload(doc)
+    except (TypeError, ValueError) as exc:
+        raise FeedError(f"feed document is not JSON-serializable: {exc}") from exc
+
+
 def new_feed(signatures: List[Dict], ttl_hours: int = 720) -> Dict:
     """Build an unsigned feed document from raw signature entries."""
     from datetime import timedelta
@@ -95,7 +102,11 @@ def verify_document(doc: Dict, extra_trusted_keys: Optional[List[str]] = None) -
     """Verify against all trusted keys; returns the fingerprint that matched."""
     if not isinstance(doc, dict) or doc.get("format") != FEED_FORMAT:
         raise FeedError("not a defentra signature feed (bad 'format')")
-    if int(doc.get("feed_version", 0)) != FEED_VERSION:
+    try:
+        version = int(doc.get("feed_version", 0))
+    except (TypeError, ValueError):
+        version = -1
+    if version != FEED_VERSION:
         raise FeedError(f"unsupported feed_version: {doc.get('feed_version')}")
     b64_sig = doc.get("signature")
     if not b64_sig or not isinstance(b64_sig, str):
@@ -114,7 +125,7 @@ def verify_document(doc: Dict, extra_trusted_keys: Optional[List[str]] = None) -
     if not candidates:
         raise FeedError("no trusted public keys installed")
 
-    payload = canonical_payload(doc)
+    payload = _safe_canonical(doc)
     errors: List[str] = []
     for path in candidates:
         try:
@@ -174,6 +185,8 @@ def save_feed(doc: Dict, path: str) -> str:
 
 
 def fetch_feed(url: str, opener=None) -> Dict:
+    if not url.lower().startswith("https://"):
+        raise FeedError(f"refusing non-HTTPS feed URL: {url}")
     opener = opener or urllib.request.urlopen
     try:
         with opener(url, timeout=60) as resp:

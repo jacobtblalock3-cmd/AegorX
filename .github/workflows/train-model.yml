@@ -12,19 +12,33 @@ on:
         required: false
         default: "500"
 
+permissions:
+  contents: read
+
 jobs:
   train:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
       - name: Install
         run: pip install -e ".[ml]"
+
+      - name: Restore signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::SIGNING_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY" > signing_private.pem
+          chmod 600 signing_private.pem
 
       - name: Download EMBER 2018
         run: |
@@ -52,6 +66,7 @@ jobs:
           python scripts/train_ember.py \
             --train "$TRAIN" --test "$TEST" \
             --out-dir artifacts \
+            --sign-key signing_private.pem \
             --rounds "${{ github.event.inputs.rounds }}"
 
       - name: Verify artifact integrity
@@ -59,8 +74,12 @@ jobs:
           cd artifacts
           sha256sum -c SHA256SUMS
 
+      - name: Destroy signing key material
+        if: always()
+        run: rm -f signing_private.pem
+
       - name: Upload model artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: defentra-ember-model-${{ github.run_id }}
           path: artifacts/

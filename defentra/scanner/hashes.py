@@ -22,8 +22,8 @@ def file_hashes(path: str) -> Dict[str, str]:
 
 
 def _hashes_python(path: str) -> Dict[str, str]:
-    h_md5 = hashlib.md5()
-    h_sha1 = hashlib.sha1()
+    h_md5 = hashlib.md5(usedforsecurity=False)
+    h_sha1 = hashlib.sha1(usedforsecurity=False)
     h_sha256 = hashlib.sha256()
     with open(path, "rb") as fh:
         while True:
@@ -37,8 +37,8 @@ def _hashes_python(path: str) -> Dict[str, str]:
 
 
 def _slow_extra(path: str):
-    h_md5 = hashlib.md5()
-    h_sha1 = hashlib.sha1()
+    h_md5 = hashlib.md5(usedforsecurity=False)
+    h_sha1 = hashlib.sha1(usedforsecurity=False)
     with open(path, "rb") as fh:
         while True:
             chunk = fh.read(1024 * 1024)

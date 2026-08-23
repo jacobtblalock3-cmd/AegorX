@@ -138,6 +138,7 @@ class ScanEngine:
             )
 
         ml_prob: Optional[float] = None
+        ml_failed = False
         if self.classifier is not None and self.classifier.available:
             try:
                 with open(path, "rb") as fh:
@@ -147,6 +148,8 @@ class ScanEngine:
                     ml_prob = self.classifier.predict_proba(vectorize(feats))
             except OSError:
                 pass
+            except Exception:
+                ml_failed = True
         result.ml_probability = ml_prob
         if ml_prob is not None:
             if ml_prob >= MALICIOUS_PROBABILITY:
@@ -170,6 +173,9 @@ class ScanEngine:
 
         result.detections = detections
         result.verdict = self._verdict(detections, ml_prob)
+        if ml_failed and result.verdict == "clean":
+            result.verdict = "error"
+            result.error = "feature extraction failed on malformed input"
         return result
 
     @staticmethod
