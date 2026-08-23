@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
 from typing import List, Optional
 
@@ -109,6 +110,32 @@ def build_parser() -> argparse.ArgumentParser:
     audit_sub = p_audit.add_subparsers(dest="audit_command")
     a_verify = audit_sub.add_parser("verify", help="verify the hash chain of a realtime audit log")
     a_verify.add_argument("log", nargs="?", default=None, help="audit log path (default: <state>/realtime.log)")
+
+    p_agent = sub.add_parser("agent", help="managed client agent (connects to your DAS admin console)")
+    agent_sub = p_agent.add_subparsers(dest="agent_command")
+    ag_pair = agent_sub.add_parser("pair", help="pair this machine with a management server (one-time)")
+    ag_pair.add_argument("--server", required=True, help="management server URL")
+    ag_pair.add_argument("--token", required=True, help="one-time pairing token from the console")
+    agent_sub.add_parser("run", help="start check-in loop (foreground; use systemd for production)")
+    agent_sub.add_parser("status", help="show pairing/connection status")
+
+    p_admin = sub.add_parser("admin", help="DAS administration console")
+    admin_sub = p_admin.add_subparsers(dest="admin_command")
+    ad_serve = admin_sub.add_parser("serve", help="run the management server")
+    ad_serve.add_argument("--host", default="127.0.0.1")
+    ad_serve.add_argument("--port", type=int, default=8477)
+    ad_serve.add_argument("--db", default=None, help="fleet database path (default: <state>/fleet.db)")
+    ad_enroll = admin_sub.add_parser("enroll-token", help="issue a one-time pairing token for a device")
+    ad_enroll.add_argument("--name", required=True, help="unique device name")
+    ad_agents = admin_sub.add_parser("agents", help="list managed devices and last-seen state")
+    ad_send = admin_sub.add_parser("send", help="queue a command for a device")
+    ad_send.add_argument("agent_name")
+    ad_send.add_argument("command", choices=("ping", "status", "diag", "scan-path", "feed-update", "quarantine-list", "quarantine-delete"))
+    ad_send.add_argument("--arg", action="append", default=None, dest="args", help="key=value argument (repeatable)")
+    ad_results = admin_sub.add_parser("results", help="recent command results")
+    ad_results.add_argument("--agent", default=None)
+    ad_dets = admin_sub.add_parser("detections", help="aggregated detections across the fleet")
+    ad_dets.add_argument("--limit", type=int, default=50)
 
     return parser
 
@@ -411,6 +438,97 @@ def cmd_audit(args) -> int:
     return EXIT_MALICIOUS
 
 
+def cmd_agent(args) -> int:
+    from defentra.management import agent as agent_mod
+
+    command = getattr(args, "agent_command", None)
+    if not command:
+        print("no agent subcommand given; use: pair | run | status", file=sys.stderr)
+        return EXIT_ERROR
+    try:
+        if command == "pair":
+            cfg = agent_mod.pair(args.server, args.token)
+            print(f"paired as {cfg['agent_id']}; admin key pinned")
+            print("start the agent with: defentra agent run")
+            return EXIT_CLEAN
+        if command == "status":
+            cfg = agent_mod.load_config()
+            print(json.dumps({
+                "paired": True,
+                "agent_id": cfg["agent_id"],
+                "server": cfg["server_url"],
+                "paired_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cfg["paired_utc"])),
+                "admin_key_pinned": bool(cfg.get("admin_public_key")),
+            }, indent=2))
+            return EXIT_CLEAN
+        if command == "run":
+            cfg = agent_mod.load_config()
+            print(
+                f"[agent] {cfg['agent_id']} checking in to {cfg['server_url']} every 60s"
+                " (Ctrl+C to stop)",
+                flush=True,
+            )
+            agent = agent_mod.DASAgent(cfg)
+            try:
+                agent.run_forever(interval_seconds=60.0)
+            except KeyboardInterrupt:
+                agent.stop()
+                print("\n[agent] stopped", file=sys.stderr)
+            return EXIT_CLEAN
+    except agent_mod.AgentConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    return EXIT_ERROR
+
+
+def cmd_admin(args) -> int:
+    from defentra.management.server import ManagementServer
+
+    server = ManagementServer(db_path=getattr(args, "db", None))
+    command = getattr(args, "admin_command", None)
+    if not command:
+        print("no admin subcommand given; use: serve | enroll-token | agents | send | results | detections", file=sys.stderr)
+        return EXIT_ERROR
+
+    if command == "serve":
+        print(f"[admin] management server on {args.host}:{args.port} (fleet db ready)")
+        print("[admin] issue pairing tokens with: defentra admin enroll-token --name DEVICE")
+        server.start_background()
+        try:
+            threading.Event().wait()
+        except KeyboardInterrupt:
+            server.shutdown()
+        return EXIT_CLEAN
+    if command == "enroll-token":
+        token = server.issue_pairing_token(args.name)
+        print(f"pairing token for '{args.name}' (single use):\n{token}")
+        print("on the device run:")
+        print(f"  defentra agent pair --server https://YOUR-CONSOLE:8477 --token {token}")
+        return EXIT_CLEAN
+    if command == "agents":
+        print(json.dumps(server.store.list_agents(), indent=2))
+        return EXIT_CLEAN
+    if command == "send":
+        rows = [a for a in server.store.list_agents() if a["name"] == args.agent_name]
+        if not rows:
+            print(f"error: unknown device '{args.agent_name}'", file=sys.stderr)
+            return EXIT_ERROR
+        cmd_args = {}
+        for kv in args.args or []:
+            key, _, value = kv.partition("=")
+            cmd_args[key] = value
+        command_id = server.store.queue_command(rows[0]["agent_id"], args.command, cmd_args, server.admin_private_key)
+        print(f"queued {command_id}; result arrives on the device's next check-in")
+        return EXIT_CLEAN
+    if command == "results":
+        print(json.dumps(server.store.results(agent_id=None, limit=50), indent=2))
+        return EXIT_CLEAN
+    if command == "detections":
+        print(json.dumps(server.store.detections(limit=args.limit), indent=2))
+        return EXIT_CLEAN
+    return EXIT_ERROR
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -426,6 +544,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         "keys": cmd_keys,
         "feed": cmd_feed,
         "audit": cmd_audit,
+        "agent": cmd_agent,
+        "admin": cmd_admin,
     }
     handler = handlers.get(args.command)
     if handler is None:

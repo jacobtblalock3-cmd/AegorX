@@ -128,6 +128,33 @@ sudo cp packaging/systemd/defentra-feed-update.{service,timer} /etc/systemd/syst
 sudo systemctl enable --now defentra-feed-update.timer
 ```
 
+### Central administration (DAS Management Plane)
+
+For managed estates, Defentra ships a client/admin split: every endpoint runs a
+**visible** `agent` service; your console sees the whole fleet and issues
+security-operations commands.
+
+```bash
+# --- console side -----------------------------------------------------------
+defentra admin serve --host 0.0.0.0 --port 8477      # run the console API
+defentra admin enroll-token --name workstation-01    # one-time pairing token
+defentra admin agents                                # fleet status / last-seen
+defentra admin send workstation-01 scan-path --arg path=/home/alice
+defentra admin results                               # command outcomes
+defentra admin detections                            # fleet-wide detections feed
+
+# --- client side (once, then as a service) ----------------------------------
+sudo defentra agent pair --server https://console.corp:8477 --token <TOKEN>
+sudo systemctl enable --now defentra-agent
+```
+
+Security properties: pairing is token-gated and single-use; every queued
+command is **Ed25519-signed by the console** and rejected by the agent if the
+signature fails or the command expired; both sides keep tamper-evident audit
+logs; agents authenticate with per-device tokens; the command set is scoped to
+security operations (`ping`, `status`, `diag`, `scan-path`, `feed-update`,
+`quarantine-list`, `quarantine-delete`) and is extensible only server-side.
+
 ### Train your own ML detector
 
 The published EMBER reference model gives you ML detection immediately
