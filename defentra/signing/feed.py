@@ -36,7 +36,8 @@ FEED_FORMAT = "defentra-signature-feed"
 FEED_VERSION = 1
 MAX_FEED_BYTES = 32 * 1024 * 1024
 DEFAULT_FEED_URL = (
-    "https://github.com/defentra/defentra/releases/latest/download/signatures.json"
+    "https://github.com/jacobtblalock3-cmd/defentra/"
+    "releases/download/signature-feed/signatures.json"
 )
 
 

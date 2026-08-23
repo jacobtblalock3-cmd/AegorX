@@ -114,6 +114,13 @@ defentra feed sign feed.json --key ~/signing/signing_private.pem
 defentra keys trust ~/signing/signing_public.pem   # recipients run this
 ```
 
+The **official feed** is rebuilt and signed daily by GitHub Actions
+(`update-signature-feed` workflow): curated lists from [`feeds/`](feeds/) are
+merged with the builtin seeds, signed with the project root key held as an
+encrypted Actions secret, self-verified against the bundled public key, and
+published to a rolling `signature-feed` release. Contribute intelligence via a
+PR to `feeds/community.json`.
+
 Run updates automatically with the provided timer:
 
 ```bash

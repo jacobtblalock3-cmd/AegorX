@@ -1,0 +1,72 @@
+name: Update signature feed
+
+on:
+  workflow_dispatch:
+    inputs:
+      ttl_hours:
+        description: "Feed validity window in hours"
+        required: false
+        default: "168"
+  schedule:
+    - cron: "17 4 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: signature-feed
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Restore signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::SIGNING_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY" > signing_private.pem
+          chmod 600 signing_private.pem
+
+      - name: Build and sign feed
+        run: |
+          mkdir -p artifacts
+          python scripts/build_feed.py \
+            --extra feeds/*.json \
+            --key signing_private.pem \
+            --ttl-hours "${{ github.event.inputs.ttl_hours || '168' }}" \
+            --out artifacts/signatures.json
+
+      - name: Self-verify against bundled root key
+        run: python -m defentra.cli feed verify artifacts/signatures.json
+
+      - name: Checksums
+        run: cd artifacts && sha256sum signatures.json > SHA256SUMS
+
+      - name: Destroy signing key material
+        if: always()
+        run: rm -f signing_private.pem
+
+      - name: Publish rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete signature-feed --yes --cleanup-tag || true
+          gh release create signature-feed \
+            artifacts/signatures.json artifacts/SHA256SUMS \
+            --title "Signature feed" \
+            --notes "Automated build $(date -u '+%Y-%m-%dT%H:%M:%SZ'). Verify with \`defentra feed verify\`; install with \`defentra feed update\`."
