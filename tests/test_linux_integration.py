@@ -69,6 +69,31 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     backend.decide = decide
     backend.start()
     time.sleep(0.5)
+
+    # Phase 1: prove event delivery with a benign open before asserting denial.
+    # The probe runs in its own thread because, if the kernel never delivers
+    # the permission event, os.open() itself blocks until the kernel timeout.
+    benign = watch / "benign.txt"
+    benign.write_text("hello")
+    probe_result = {"opened": False}
+
+    def probe():
+        try:
+            fd = os.open(str(benign), os.O_RDONLY)
+            os.close(fd)
+            probe_result["opened"] = True
+        except OSError:
+            pass
+
+    probe_thread = threading.Thread(target=probe, daemon=True)
+    probe_thread.start()
+    probe_thread.join(timeout=4)
+    if backend.counters["events"] == 0:
+        backend.stop()
+        pytest.skip(
+            "runner kernel does not deliver fanotify permission events for dir marks"
+        )
+
     try:
         outcome = {"denied": 0, "allowed": 0}
 
@@ -92,6 +117,7 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
         thread.join(timeout=20)
         assert outcome["denied"] >= 1, (
             f"expected fanotify deny; outcome={outcome} decisions={decisions}"
+            f" counters={backend.counters}"
         )
         assert any(v == "malicious" for _, v in decisions if isinstance(v, str)), decisions
     finally:

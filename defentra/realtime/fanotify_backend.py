@@ -75,6 +75,7 @@ class FanotifyBackend(BackendBase):
         self._thread: Optional[threading.Thread] = None
         self._stop_evt = threading.Event()
         self._libc = None
+        self.counters = {"events": 0, "responses": 0, "denied": 0, "allowed": 0}
 
     @staticmethod
     def available() -> bool:
@@ -196,6 +197,8 @@ class FanotifyBackend(BackendBase):
 
     def _respond(self, fd: int, allow: bool) -> None:
         response = FAN_ALLOW if allow else FAN_DENY
+        self.counters["responses"] += 1
+        self.counters["allowed" if allow else "denied"] += 1
         try:
             os.write(self._fd, RESPONSE_STRUCT.pack(fd, response))
         except OSError:
