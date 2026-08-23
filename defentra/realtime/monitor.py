@@ -199,6 +199,11 @@ class RealTimeMonitor:
             os.makedirs(parent, exist_ok=True)
         self.backend.start()
         self._started_at = time.time()
+        from defentra.shield import Heartbeat, install_signal_handlers
+
+        self._heartbeat = Heartbeat()
+        self._heartbeat.start()
+        install_signal_handlers(on_stop=self._stop_evt.set, audit=(self._log if self.audit else None))
         print(
             f"[realtime] backend={self.backend.name} pid={os.getpid()} "
             f"watching={len(self.paths)} path(s): {', '.join(self.paths)}",
@@ -217,6 +222,8 @@ class RealTimeMonitor:
         except KeyboardInterrupt:
             print("\n[realtime] shutting down...", file=sys.stderr, flush=True)
         finally:
+            if getattr(self, "_heartbeat", None) is not None:
+                self._heartbeat.stop()
             self.stop()
 
     def stop(self) -> None:

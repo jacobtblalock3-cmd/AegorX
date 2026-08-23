@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import time
 from typing import Iterable, List
 
@@ -19,7 +20,7 @@ COLORS = {
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
-_CONTROL_RE = __import__("re").compile(r"[\x00-\x1f\x7f]")
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def sanitize(text: str) -> str:

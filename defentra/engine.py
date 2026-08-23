@@ -17,7 +17,10 @@ SUSPICIOUS_SEVERITY = 5
 MALICIOUS_PROBABILITY = 0.85
 SUSPICIOUS_PROBABILITY = 0.60
 DEFAULT_MAX_FILE_SIZE = 512 * 1024 * 1024
-DEFAULT_RULES_DIRS = [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules")]
+_REPO_RULES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules"
+)
+DEFAULT_RULES_DIRS = [_REPO_RULES_DIR] if os.path.isdir(_REPO_RULES_DIR) else []
 
 
 @dataclass

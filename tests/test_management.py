@@ -39,10 +39,6 @@ def fleet(tmp_home, tmp_path):
     server.shutdown()
 
 
-def _pair_agent(server_url, opener=None):
-    return agent_mod.pair(server_url + "/unused", "tok", opener=opener) if False else None
-
-
 def test_command_signing_and_verification():
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 

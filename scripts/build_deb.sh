@@ -15,7 +15,7 @@ trap 'rm -rf "$STAGE"' EXIT
 
 LIB_DIR="$PKG/lib/systemd/system"
 APP_DIR="$STAGE/opt/defentra/lib"
-mkdir -p "$LIB_DIR" "$APP_DIR"
+mkdir -p "$LIB_DIR" "$APP_DIR" "$PKG/DEBIAN" "$PKG/usr/bin"
 
 pip install --quiet --no-deps --target "$APP_DIR" .
 

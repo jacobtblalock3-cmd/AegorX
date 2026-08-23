@@ -137,6 +137,16 @@ def build_parser() -> argparse.ArgumentParser:
     ad_dets = admin_sub.add_parser("detections", help="aggregated detections across the fleet")
     ad_dets.add_argument("--limit", type=int, default=50)
 
+    p_watch = sub.add_parser("watchdog", help="verify realtime protection liveness; restart if stale")
+    p_watch.add_argument("--max-age", type=int, default=90, help="heartbeat staleness threshold (seconds)")
+    p_watch.add_argument("--service", default="defentra-monitor", help="systemd unit to restart")
+    p_watch.add_argument("--no-restart", action="store_true", help="report only")
+
+    p_protect = sub.add_parser("protect", help="trust-anchor integrity operations")
+    protect_sub = p_protect.add_subparsers(dest="protect_command")
+    protect_sub.add_parser("seal", help="pin current hashes of trusted keys and agent config")
+    protect_sub.add_parser("check", help="verify trust anchors against the sealed manifest")
+
     return parser
 
 
@@ -157,10 +167,9 @@ def cmd_scan(args) -> int:
         print(render_json(all_results, " ".join(args.paths), elapsed))
     else:
         print(render_text(all_results, " ".join(args.paths), elapsed, color=not args.no_color))
-        if not args.json:
-            ml_state = "loaded" if caps["ml_model"] else "not found (train with scripts/train_model.py)"
-            yara_state = f"{caps['yara_rules']} rule file(s)" if caps["yara_available"] else "unavailable (pip install yara-python)"
-            print(f"engines: signatures={caps['signature_db']} | yara={yara_state} | ml={ml_state} | hash={caps['hash_backend']}")
+        ml_state = "loaded" if caps["ml_model"] else "not found (train with scripts/train_model.py)"
+        yara_state = f"{caps['yara_rules']} rule file(s)" if caps["yara_available"] else "unavailable (pip install yara-python)"
+        print(f"engines: signatures={caps['signature_db']} | yara={yara_state} | ml={ml_state} | hash={caps['hash_backend']}")
 
     if any(r.verdict == "malicious" for r in all_results):
         return EXIT_MALICIOUS
@@ -529,6 +538,57 @@ def cmd_admin(args) -> int:
     return EXIT_ERROR
 
 
+def cmd_watchdog(args) -> int:
+    from defentra.shield import liveness, restart_service
+
+    status = liveness(max_age_seconds=args.max_age)
+    print(json.dumps(status, indent=2))
+    if status["healthy"]:
+        return EXIT_CLEAN
+    if args.no_restart:
+        print("protection is NOT healthy; restart suppressed (--no-restart)", file=sys.stderr)
+        return EXIT_MALICIOUS
+    restarted = restart_service(args.service)
+    if restarted:
+        print(f"stale protection detected; restarted {args.service}")
+        return EXIT_CLEAN
+    print(
+        "protection is NOT healthy and automatic restart failed;"
+        " start it manually: sudo systemctl restart " + args.service,
+        file=sys.stderr,
+    )
+    return EXIT_MALICIOUS
+
+
+def cmd_protect(args) -> int:
+    from defentra import shield
+
+    command = getattr(args, "protect_command", None)
+    if not command:
+        print("no protect subcommand given; use: seal | check", file=sys.stderr)
+        return EXIT_ERROR
+    if command == "seal":
+        manifest = shield.seal()
+        print(f"sealed {len(manifest['entries'])} trust-anchor file(s)")
+        for path in manifest["entries"]:
+            print(f"  {path}")
+        return EXIT_CLEAN
+    if command == "check":
+        report = shield.verify()
+        if not report["sealed"]:
+            print("no protection manifest found; run 'defentra protect seal' first", file=sys.stderr)
+            return EXIT_ERROR
+        if report["ok"]:
+            print("trust anchors intact")
+            return EXIT_CLEAN
+        for path in report["changed"]:
+            print(f"TAMPERED: {path}", file=sys.stderr)
+        for path in report["missing"]:
+            print(f"MISSING:  {path}", file=sys.stderr)
+        return EXIT_MALICIOUS
+    return EXIT_ERROR
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -546,6 +606,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         "audit": cmd_audit,
         "agent": cmd_agent,
         "admin": cmd_admin,
+        "watchdog": cmd_watchdog,
+        "protect": cmd_protect,
     }
     handler = handlers.get(args.command)
     if handler is None:

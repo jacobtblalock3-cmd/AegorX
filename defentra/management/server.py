@@ -376,7 +376,11 @@ class ManagementServer:
                 pubkey = message.get("pubkey")
                 if not isinstance(pubkey, str) or "BEGIN PUBLIC KEY" not in pubkey:
                     return self._json(400, {"error": "missing agent public key"})
-                agent_id, api_token = server.store.enroll(name, pubkey)
+                try:
+                    agent_id, api_token = server.store.enroll(name, pubkey)
+                except ValueError:
+                    server.store.audit("anonymous", "enroll-rejected", f"duplicate name {name}")
+                    return self._json(409, {"error": f"device name '{name}' already enrolled"})
                 return self._json(
                     200,
                     {

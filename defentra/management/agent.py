@@ -99,7 +99,7 @@ def _load_admin_public_key(cfg: Dict):
     return serialization.load_pem_public_key(cfg["admin_public_key"].encode())
 
 
-def post_json(url: str, payload: Dict, timeout: int = 30, opener=None) -> Dict:
+def post_json(url: str, payload: Dict, timeout: int = 30, opener=None, max_response: int = 4 * 1024 * 1024) -> Dict:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode(),
@@ -107,7 +107,10 @@ def post_json(url: str, payload: Dict, timeout: int = 30, opener=None) -> Dict:
         method="POST",
     )
     with (opener or urllib.request.urlopen)(request, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+        data = resp.read(max_response + 1)
+    if len(data) > max_response:
+        raise ValueError("server response exceeded size limit")
+    return json.loads(data.decode("utf-8"))
 
 
 class DASAgent:
