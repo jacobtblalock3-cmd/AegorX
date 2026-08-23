@@ -6,10 +6,10 @@ CAP_SYS_ADMIN). On macOS or unprivileged environments they self-skip.
 
 from __future__ import annotations
 
+import faulthandler
 import os
 import subprocess
 import sys
-import textwrap
 import threading
 import time
 
@@ -45,6 +45,15 @@ def test_inotify_backend_reports_available():
 @linux_only
 @root_only
 def test_fanotify_denies_malicious_open(engine, tmp_path):
+    """Hard-bounded: any stall self-reports its stack after 75s."""
+    faulthandler.dump_traceback_later(75, exit=True)
+    try:
+        _fanotify_deny_body(engine, tmp_path)
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+
+
+def _fanotify_deny_body(engine, tmp_path):
     from defentra.realtime.fanotify_backend import FanotifyBackend
 
     if not FanotifyBackend.available():
