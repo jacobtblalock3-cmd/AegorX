@@ -1,0 +1,13 @@
+[package]
+name = "defentra-core"
+version = "0.1.0"
+edition = "2021"
+description = "Performance-critical primitives for the Defentra antivirus engine"
+
+[lib]
+name = "_defentra_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+sha2 = "0.10"

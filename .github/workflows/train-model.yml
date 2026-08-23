@@ -1,0 +1,62 @@
+name: Train reference model
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_url:
+        description: "EMBER 2018 dataset tarball URL"
+        required: false
+        default: "https://pubdata.endgame.com/ember/ember_dataset.tar.bz2"
+      rounds:
+        description: "LightGBM boosting rounds"
+        required: false
+        default: "500"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: pip install -e ".[ml]"
+
+      - name: Download EMBER 2018
+        run: |
+          curl -fSL --retry 3 -o ember.tar.bz2 "${{ github.event.inputs.dataset_url }}"
+          mkdir ember
+          tar -xjf ember.tar.bz2 -C ember
+          find ember -name '*.jsonl' -exec ls -lh {} \;
+
+      - name: Train
+        run: |
+          TRAIN=$(find ember -name 'train.jsonl' | head -1)
+          TEST=$(find ember -name 'test.jsonl' | head -1)
+          python scripts/train_ember.py \
+            --train "$TRAIN" --test "$TEST" \
+            --out-dir artifacts \
+            --rounds "${{ github.event.inputs.rounds }}"
+
+      - name: Verify artifact integrity
+        run: |
+          cd artifacts
+          sha256sum -c SHA256SUMS
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: defentra-ember-model-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+
+      - name: Publishing instructions
+        run: |
+          echo "Publish manually (requires release rights):"
+          echo "  gh release create <tag> --draft --title 'Reference model' --notes 'EMBER-trained, see models/README.md'"
+          echo "  cp artifacts/malware-ember.lgbm defentra-ember-reference.lgbm"
+          echo "  gh release upload <tag> defentra-ember-reference.lgbm artifacts/malware-ember.lgbm.meta.json"

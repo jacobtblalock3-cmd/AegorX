@@ -1,0 +1,17 @@
+[Unit]
+Description=Defentra real-time antivirus protection
+Documentation=https://github.com/defentra/defentra
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/opt/defentra/bin/defentra monitor --backend fanotify /
+Restart=on-failure
+RestartSec=5
+# fanotify permission events require CAP_SYS_ADMIN
+PermissionsStartOnly=true
+Nice=-5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
