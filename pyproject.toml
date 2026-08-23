@@ -23,7 +23,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/defentra/defentra"
+Homepage = "https://github.com/jacobtblalock3-cmd/defentra"
+Security = "https://github.com/jacobtblalock3-cmd/defentra/blob/main/SECURITY.md"
 
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
