@@ -146,14 +146,26 @@ def parse_urlhaus(payload: dict) -> List[Dict]:
     return entries
 
 
-def http_post_json(url: str, fields: Dict[str, str], opener=None) -> dict:
+def http_post_json(url: str, fields: Dict[str, str], opener=None, headers=None) -> dict:
     if not url.lower().startswith("https://"):
         raise IntelSourceError(f"refusing non-HTTPS intel URL: {url}")
     opener = opener or urllib.request.urlopen
     body = urllib.parse.urlencode(fields).encode()
-    request = urllib.request.Request(
-        url, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )
+    request_headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    request_headers.update(headers or {})
+    request = urllib.request.Request(url, data=body, headers=request_headers)
+    try:
+        with opener(request, timeout=60) as resp:
+            return json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception as exc:
+        raise IntelSourceError(f"{url}: {exc}")
+
+
+def http_get_json(url: str, opener=None, headers=None) -> dict:
+    if not url.lower().startswith("https://"):
+        raise IntelSourceError(f"refusing non-HTTPS intel URL: {url}")
+    opener = opener or urllib.request.urlopen
+    request = urllib.request.Request(url, headers=dict(headers or {}))
     try:
         with opener(request, timeout=60) as resp:
             return json.loads(resp.read().decode("utf-8", errors="replace"))
@@ -162,14 +174,20 @@ def http_post_json(url: str, fields: Dict[str, str], opener=None) -> dict:
 
 
 def fetch_malwarebazaar(auth_key: str = "", opener=None) -> List[Dict]:
+    # abuse.ch requires the Auth-Key as an HTTP header; sending it as a form
+    # field yields 401 despite a valid key.
     fields: Dict[str, str] = {"query": "get_recent", "selector": "time"}
-    if auth_key:
-        fields["Auth-Key"] = auth_key
-    return parse_malwarebazaar(http_post_json(MALWAREBAZAAR_URL, fields, opener=opener))
+    headers = {"Auth-Key": auth_key} if auth_key else None
+    return parse_malwarebazaar(
+        http_post_json(MALWAREBAZAAR_URL, fields, opener=opener, headers=headers)
+    )
 
 
-def fetch_urlhaus(limit: int = 1000, opener=None) -> List[Dict]:
-    payload = http_post_json(URLHAUS_RECENT_URL, {"limit": str(min(limit, 1000))}, opener=opener)
+def fetch_urlhaus(auth_key: str = "", limit: int = 1000, opener=None) -> List[Dict]:
+    # URLhaus recent-payloads expects GET + Auth-Key header (POST -> 405).
+    del limit  # the recent endpoint has no server-side limit parameter
+    headers = {"Auth-Key": auth_key} if auth_key else None
+    payload = http_get_json(URLHAUS_RECENT_URL, opener=opener, headers=headers)
     return parse_urlhaus(payload)
 
 
@@ -256,7 +274,7 @@ def run(args, opener: Optional[Callable] = None) -> int:
                     with open(args.uh_response, "r", encoding="utf-8") as fh:
                         entries = parse_urlhaus(json.load(fh))
                 else:
-                    entries = fetch_urlhaus(opener=args.opener)
+                    entries = fetch_urlhaus(auth_key=auth_key, opener=args.opener)
             else:
                 print(f"[intel] unknown source '{source}', skipping", file=sys.stderr)
                 continue
