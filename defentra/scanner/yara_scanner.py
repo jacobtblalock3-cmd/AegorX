@@ -45,11 +45,14 @@ class YaraScanner:
 
     def _compile(self) -> None:
         sources = self._collect_sources()
-        combined = "\n".join(sources.values())
-        if not combined.strip():
+        if not sources:
             return
+        # Namespace each file so identical rule names across sources
+        # (e.g. a builtin rule also shipped via the signed feed) coexist
+        # instead of failing compilation with DUPLICATE_IDENTIFIER.
+        namespaced = {f"ns{idx}": source for idx, source in enumerate(sources.values())}
         try:
-            self.rules = yara.compile(source=combined)
+            self.rules = yara.compile(sources=namespaced)
             self.rule_count = len(sources)
         except yara.Error:
             self.rules = None
