@@ -1,4 +1,4 @@
-name: Fanotify flag matrix
+name: Fanotify header truth
 
 on:
   workflow_dispatch:
@@ -7,49 +7,11 @@ permissions:
   contents: read
 
 jobs:
-  matrix-probe:
+  headers:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Probe fanotify_init flag acceptance
+      - name: Dump canonical fanotify constants
         run: |
           uname -r
-          sudo python3 - <<'PY'
-          import ctypes, os
-
-          libc = ctypes.CDLL(None, use_errno=True)
-          libc.fanotify_init.restype = ctypes.c_int
-          libc.fanotify_init.argtypes = [ctypes.c_uint, ctypes.c_uint]
-
-          NAMES = {
-              0x00000001: "NOTIF",
-              0x00000100: "CONTENT",
-              0x00000800: "PRE_CONTENT",
-          }
-          FLAGS = {
-              "CLOEXEC": 0x00800000,
-              "NONBLOCK": 0x00000001,
-              "UNLIMITED_QUEUE": 0x00001000,
-              "REPORT_PIDFD": 0x00080000,
-              "REPORT_FID": 0x00000200,
-              "REPORT_NAME": 0x00001000,
-              "REPORT_DIR_FID": 0x00000400,
-          }
-          euid_ok = os.geteuid() == 0
-          print("euid==0:", euid_ok)
-
-          def attempt(label, flags):
-              fd = libc.fanotify_init(flags, os.O_RDONLY | os.O_CLOEXEC)
-              err = ctypes.get_errno()
-              print(f"{label:<52} -> fd={fd} errno={err} ({os.strerror(err) if fd < 0 else 'ok'})")
-              if fd >= 0:
-                  os.close(fd)
-              return fd
-
-          classes = [v for k, v in NAMES.items() if k in ("NOTIF", "CONTENT", "PRE_CONTENT")]
-          for cval, cname in NAMES.items():
-              attempt(f"[{cname}] bare", cval)
-              for fname, fval in FLAGS.items():
-                  attempt(f"[{cname}] +{fname}", cval | fval)
-              attempt(f"[{cname}] CLOEXEC|UNLIMITED_QUEUE", cval | 0x00800000 | 0x00001000)
-          PY
+          grep -E "^#define (FAN_|FANOTIFY_)" /usr/include/linux/fanotify.h | grep -vE "_VERSION|SET_ATTR"
