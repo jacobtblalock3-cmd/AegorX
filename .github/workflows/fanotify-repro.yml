@@ -1,0 +1,88 @@
+name: Fanotify minimal repro
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repro:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Raw fanotify permission-event round trip
+        run: |
+          uname -r
+          sudo python3 - <<'PY'
+          import ctypes, os, select, signal, struct, sys, time
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          libc.fanotify_init.restype = ctypes.c_int
+          libc.fanotify_init.argtypes = [ctypes.c_uint, ctypes.c_uint]
+          libc.fanotify_mark.restype = ctypes.c_int
+          libc.fanotify_mark.argtypes = [ctypes.c_int, ctypes.c_uint, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p]
+
+          FAN_CLASS_CONTENT = 0x00000100
+          FAN_CLOEXEC = 0x00800000
+          FAN_UNLIMITED_QUEUE = 0x00001000
+          FAN_OPEN_PERM = 0x00010000
+          FAN_EVENT_ON_CHILD = 0x08000000
+          FAN_MARK_ADD = 0x00000001
+          AT_FDCWD = -100
+          META = struct.Struct("IBBHQii")
+          RESP = struct.Struct("iI")
+
+          print("== init")
+          fd = libc.fanotify_init(FAN_CLASS_CONTENT | FAN_CLOEXEC | FAN_UNLIMITED_QUEUE, os.O_RDONLY | os.O_CLOEXEC)
+          print("fd:", fd, "errno:", ctypes.get_errno())
+          assert fd >= 0
+          os.set_blocking(fd, False)
+
+          d = "/tmp/fa-probe"
+          os.makedirs(d, exist_ok=True)
+          target = os.path.join(d, "f.txt")
+          open(target, "w").write("hello")
+
+          print("== mark")
+          rc = libc.fanotify_mark(fd, FAN_MARK_ADD, FAN_OPEN_PERM | FAN_EVENT_ON_CHILD, AT_FDCWD, os.fsencode(d))
+          print("mark rc:", rc, "errno:", ctypes.get_errno())
+          assert rc == 0
+
+          child = os.fork()
+          if child == 0:
+              time.sleep(0.2)
+              try:
+                  fh = open(target, "rb")
+                  fh.read(1)
+                  print("CHILD: OPENED", flush=True)
+              except PermissionError:
+                  print("CHILD: DENIED", flush=True)
+              os._exit(0)
+
+          ready, _, _ = select.select([fd], [], [], 15)
+          print("select ready:", bool(ready))
+          buf = os.read(fd, 4096)
+          print("raw bytes:", buf.hex())
+
+          offset = 0
+          while offset + META.size <= len(buf):
+              event_len, vers, res, meta_len, mask, efd, pid = META.unpack_from(buf, offset)
+              print(f"event: len={event_len} ver={vers} metalen={meta_len} mask={mask:#x} fd={efd} pid={pid}")
+              r = RESP.pack(efd, 0x10)  # FAN_ALLOW
+              try:
+                  n = os.write(fd, r)
+                  print("respond wrote:", n)
+              except OSError as exc:
+                  print("respond FAILED:", exc)
+                  # retry with DENY to see if value matters
+                  try:
+                      n = os.write(fd, RESP.pack(efd, 0x20))
+                      print("retry deny wrote:", n)
+                  except OSError as exc2:
+                      print("retry deny FAILED:", exc2)
+              offset += event_len
+
+          _, status = os.waitpid(child, 0)
+          print("child status:", status)
+          PY
