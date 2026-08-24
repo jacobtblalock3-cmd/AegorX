@@ -116,14 +116,9 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
         return outcome
 
     try:
+        assert not external_open(benign), "benign file must remain readable"
         if backend.counters["events"] == 0:
-            # probe with the benign file; skip when kernel delivers nothing
-            benign_denied = external_open(benign)
-            if backend.counters["events"] == 0:
-                pytest.skip("kernel did not deliver permission events for dir marks")
-            assert not benign_denied, "benign file must remain readable"
-        else:
-            assert not external_open(benign), "benign file must remain readable"
+            pytest.skip("kernel did not deliver permission events for dir marks")
 
         denied = external_open(target)
         notes = f"counters={backend.counters} decisions={decisions}"

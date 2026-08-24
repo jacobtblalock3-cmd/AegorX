@@ -187,6 +187,7 @@ class FanotifyBackend(BackendBase):
 
     def _handle(self, meta: dict) -> None:
         fd = meta["fd"]
+        self.counters["events"] += 1
         self._debug(f"event pid={meta['pid']} mask={meta['mask']:#x} fd={fd}")
         try:
             if meta["mask"] & FAN_Q_OVERFLOW or fd < 0:
