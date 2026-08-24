@@ -45,18 +45,13 @@ def test_inotify_backend_reports_available():
 @linux_only
 @root_only
 def test_fanotify_denies_malicious_open(engine, tmp_path):
-    """Minimal blocking-open proof: EICAR open must fail with EPERM.
+    """On-access enforcement: external open of EICAR must fail with EPERM.
 
-    Gated behind DEFENTRA_FANOTIFY_STRICT=1: GitHub runner VMs exhibit an
-    interpreter-level fault under sudo when this test runs, while every
-    surrounding test (inotify quarantine, live signed feed, systemd units)
-    passes as root. Run this on a real Linux host before production rollout:
-
-        sudo DEFENTRA_FANOTIFY_STRICT=1 python -m pytest \\
-            tests/test_linux_integration.py::test_fanotify_denies_malicious_open -v
+    Openers run in subprocesses so events carry an external pid — our own
+    process's nested reads are auto-allowed by the backend's self-guard
+    (deciding requires re-reading the file, which would otherwise
+    self-deadlock the reader thread).
     """
-    if not os.environ.get("DEFENTRA_FANOTIFY_STRICT"):
-        pytest.skip("requires DEFENTRA_FANOTIFY_STRICT=1 (see docstring)")
     faulthandler.dump_traceback_later(110, exit=True, file=sys.__stderr__)
     from defentra.realtime.fanotify_backend import FanotifyBackend
 
@@ -88,34 +83,46 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     backend.decide = decide
     print("[fanotify-test] starting backend", flush=True)
     backend.start()
-    print("[fanotify-test] backend started; opening benign file", flush=True)
+
+    opener = (
+        "import sys\n"
+        "try:\n"
+        "    fh = open(sys.argv[1], 'rb')\n"
+        "    fh.read(4)\n"
+        "    print('OPENED')\n"
+        "except PermissionError:\n"
+        "    print('DENIED')\n"
+    )
+
+    def external_open(path):
+        proc = subprocess.run(
+            [sys.executable, "-c", opener, str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        outcome = "DENIED" in proc.stdout and "OPENED" not in proc.stdout
+        print(f"[fanotify-test] open {path} -> {'DENIED' if outcome else 'OPENED'}", flush=True)
+        return outcome
 
     try:
-        benign_open_ok = None
-        try:
-            fd = os.open(str(benign), os.O_RDONLY)
-            os.close(fd)
-            benign_open_ok = True
-        except PermissionError:
-            benign_open_ok = False
-        print(
-            f"[fanotify-test] benign opened={benign_open_ok} counters={backend.counters}",
-            flush=True,
-        )
         if backend.counters["events"] == 0:
-            pytest.skip("kernel did not deliver permission events for dir marks")
-        assert benign_open_ok, "benign file must remain readable"
+            # probe with the benign file; skip when kernel delivers nothing
+            benign_denied = external_open(benign)
+            if backend.counters["events"] == 0:
+                pytest.skip("kernel did not deliver permission events for dir marks")
+            assert not benign_denied, "benign file must remain readable"
+        else:
+            assert not external_open(benign), "benign file must remain readable"
 
-        try:
-            fd = os.open(str(target), os.O_RDONLY)
-            os.close(fd)
-            denied = False
-        except PermissionError:
-            denied = True
-        elapsed_notes = f"counters={backend.counters} decisions={decisions}"
-        print(f"[fanotify-test] eicar denied={denied} {elapsed_notes}", flush=True)
-        assert denied, f"EICAR open was allowed: {elapsed_notes}"
-        assert backend.counters["denied"] >= 1
+        denied = external_open(target)
+        notes = f"counters={backend.counters} decisions={decisions}"
+        print(f"[fanotify-test] eicar denied={denied} {notes}", flush=True)
+        assert denied, f"EICAR open was allowed: {notes}"
+        assert backend.counters["denied"] >= 1, notes
+        assert any(v == "malicious" for _, v in decisions if _ != "scan-error") or any(
+            d[0] == str(target) for d in decisions
+        ), notes
     finally:
         backend.stop()
 

@@ -75,7 +75,13 @@ class FanotifyBackend(BackendBase):
         self._thread: Optional[threading.Thread] = None
         self._stop_evt = threading.Event()
         self._libc = None
-        self.counters = {"events": 0, "responses": 0, "denied": 0, "allowed": 0}
+        self.counters = {"events": 0, "responses": 0, "denied": 0, "allowed": 0, "self_allowed": 0}
+        self._pid = os.getpid()
+        self._trusted_pids: set = set()
+
+    def trust_pid(self, pid: int) -> None:
+        """Register a helper process whose I/O must never be re-scanned."""
+        self._trusted_pids.add(int(pid))
 
     @staticmethod
     def available() -> bool:
@@ -172,6 +178,16 @@ class FanotifyBackend(BackendBase):
         fd = meta["fd"]
         try:
             if meta["mask"] & FAN_Q_OVERFLOW or fd < 0:
+                self._respond(fd, True)
+                return
+            # Self-access guard: deciding an event requires re-opening the
+            # same file, which queues a nested permission event for OUR pid.
+            # Answering that with another scan deadlocks the reader thread
+            # (observed on Linux runners). Production scanners therefore
+            # auto-allow their own process I/O; external pids get full
+            # verdicts.
+            if meta["pid"] == self._pid or meta["pid"] in self._trusted_pids:
+                self.counters["self_allowed"] += 1
                 self._respond(fd, True)
                 return
             allowed = True
