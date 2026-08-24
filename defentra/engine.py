@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from defentra.ml.features import extract_features, looks_executable, vectorize
-from defentra.scanner import archives, office
+from defentra.scanner import archives, office, pdfdoc
 from defentra.scanner.archives import ArchiveLimits
 from defentra.scanner.hashes import FAST_BACKEND, file_hashes
 from defentra.scanner.yara_scanner import YaraScanner
@@ -91,6 +91,7 @@ class ScanEngine:
             "hash_backend": self.fast_backend,
             "archives": True,
             "office_macros": office.OFFICE_AVAILABLE,
+            "pdf": True,
         }
 
     def scan_target(self, target: str, recursive: bool = True) -> List[FileScanResult]:
@@ -190,6 +191,14 @@ class ScanEngine:
             else:
                 for od in office_detections:
                     detections.append(Detection("office", od["name"], od["severity"], od["details"]))
+
+        # PDF documents: auto-exec / launch-action analysis (also reached
+        # through archive entries).
+        if pdfdoc.looks_like_pdf(head):
+            pdf_detections = pdfdoc.analyze_pdf(path)
+            if pdf_detections:
+                for pd in pdf_detections:
+                    detections.append(Detection("pdf", pd["name"], pd["severity"], pd["details"]))
 
         # Archives: bounded extraction, then recursive scan of the contents.
         archive_note: Optional[str] = None

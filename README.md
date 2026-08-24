@@ -33,6 +33,7 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 | Features   | Pure Python         | PE/ELF header parsing, section entropy, import analysis      |
 | Archives   | stdlib              | Bounded zip/tar/gz inspection: nested payloads, bomb guards  |
 | Office     | oletools (optional) | VBA macro risk analysis for OLE documents (`office` extra)   |
+| PDF        | stdlib              | Auto-exec/Launch/JS heuristics incl. compressed streams      |
 | Quarantine | Fernet (optional)   | Encrypted vault with restore/audit trail                     |
 | Fast path  | Rust + PyO3         | Streaming SHA-256 for large files (`rust-core/`)             |
 
@@ -57,7 +58,12 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
    `office` extra is installed (`pip install 'defentra[office]'`): auto-exec
    chains that combine an entrypoint with process execution score malicious;
    risky APIs alone score suspicious; benign macros are noted info-level.
-6. **Verdict policy**
+6. **PDF** — auto-execution analysis: `/OpenAction`/`/AA` combined with
+   `/JS`//`Launch` scores malicious (code runs on open), active content alone
+   scores suspicious, embedded files and form submission are informational.
+   Compressed (FlateDecode) streams are inflated under budget before scoring,
+   so payloads hidden from plain-text YARA are still caught.
+7. **Verdict policy**
    - `malicious`: severity ≥ 8 or ML ≥ 0.85
    - `suspicious`: severity ≥ 5 or ML ≥ 0.60
    - `clean`: otherwise
