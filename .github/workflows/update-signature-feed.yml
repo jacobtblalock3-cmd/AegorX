@@ -67,7 +67,7 @@ jobs:
         run: |
           mkdir -p artifacts
           python scripts/build_feed.py \
-            --extra feeds/*.json \
+            --extra 'feeds/*.json' \
             --rules-glob 'rules/*.yar' \
             --key signing_private.pem \
             --ttl-hours "${{ github.event.inputs.ttl_hours || '168' }}" \

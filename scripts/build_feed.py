@@ -128,13 +128,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, help="output path for the (signed) feed")
     parser.add_argument("--key", default=None, help="Ed25519 private key PEM; omit for unsigned draft")
-    parser.add_argument("--extra", action="append", default=None, help="curated signatures JSON (repeatable)")
-    parser.add_argument("--rules-glob", action="append", default=None, dest="rules_glob", help="YARA rule file/glob to embed (repeatable)")
+    parser.add_argument("--extra", action="append", nargs="+", default=None, metavar="JSON", help="curated signatures JSON file(s)/glob(s), repeatable")
+    parser.add_argument("--rules-glob", action="append", nargs="+", default=None, metavar="GLOB", dest="rules_glob", help="YARA rule file(s)/glob(s) to embed, repeatable")
     parser.add_argument("--ttl-hours", type=int, default=168, help="feed validity window (default 7 days)")
     args = parser.parse_args()
 
-    doc = build_feed(args.extra, ttl_hours=args.ttl_hours, rules_globs=args.rules_glob)
-    if args.rules_glob:
+    extras = [p for group in (args.extra or []) for p in group]
+    rule_globs = [g for group in (args.rules_glob or []) for g in group]
+    doc = build_feed(extras, ttl_hours=args.ttl_hours, rules_globs=rule_globs)
+    if rule_globs:
         print(f"[feed] embedded {len(doc.get('rules', []))} YARA rule(s)")
     if args.key:
         doc = sign_document(doc, args.key)
