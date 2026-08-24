@@ -81,6 +81,18 @@ class YaraScanner:
     def available(self) -> bool:
         return self.rules is not None
 
+    def match_bytes(self, data: bytes) -> List[dict]:
+        """Match an in-memory buffer (used for fd-based permission decisions)."""
+        if self.rules is None or not data:
+            return []
+        try:
+            matches = self.rules.match(data=data, timeout=self.timeout)
+        except yara.TimeoutError:
+            return []
+        except yara.Error:
+            return []
+        return self._format_matches(matches)
+
     def match_file(self, path: str) -> List[dict]:
         if self.rules is None:
             return []
@@ -90,6 +102,9 @@ class YaraScanner:
             return []
         except yara.Error:
             return []
+        return self._format_matches(matches)
+
+    def _format_matches(self, matches) -> List[dict]:
         results = []
         for m in matches:
             severity = m.meta.get("severity", 5)

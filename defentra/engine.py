@@ -112,6 +112,83 @@ class ScanEngine:
     def scan_file(self, path: str) -> FileScanResult:
         return self._scan_file(os.path.abspath(path), depth=0)
 
+    def scan_file_descriptor(self, fd: int, path_hint: str = "") -> FileScanResult:
+        """Scan via an ALREADY-OPEN descriptor without open(2) on the path.
+
+        Used by fanotify permission decisions: the kernel hands us an open
+        handle for the very open we are adjudicating; re-opening the path
+        would queue a nested permission event and deadlock the reader.
+        Signature + YARA detectors run on the descriptor's bytes; ML and
+        archive recursion stay path-based and are skipped in this mode.
+        """
+        result = FileScanResult(path=path_hint or f"<fd:{fd}>")
+        try:
+            st = os.fstat(fd)
+        except OSError as exc:
+            result.verdict = "error"
+            result.error = str(exc)
+            return result
+        size = st.st_size
+        result.size = size
+        if size > self.max_file_size:
+            result.verdict = "error"
+            result.error = f"skipped: exceeds max size ({self.max_file_size} bytes)"
+            return result
+
+        from defentra.scanner.hashes import file_hashes_fd
+
+        try:
+            dup = os.dup(fd)
+        except OSError as exc:
+            result.verdict = "error"
+            result.error = str(exc)
+            return result
+        try:
+            hashes = file_hashes_fd(dup, size)
+            result.md5, result.sha1, result.sha256 = (
+                hashes["md5"],
+                hashes["sha1"],
+                hashes["sha256"],
+            )
+        except OSError as exc:
+            os.close(dup)
+            result.verdict = "error"
+            result.error = str(exc)
+            return result
+
+        detections: List[Detection] = []
+        sig = self.db.lookup(sha256=result.sha256, md5=result.md5, sha1=result.sha1)
+        if sig:
+            detections.append(
+                Detection(
+                    detector="signature",
+                    name=sig["name"],
+                    severity=int(sig["severity"]),
+                    details={"family": sig.get("family", ""), "source": sig.get("source", "")},
+                )
+            )
+        try:
+            os.lseek(dup, 0, os.SEEK_SET)
+            with os.fdopen(os.dup(dup), "rb") as fh:
+                data = fh.read(self.max_file_size + 1)
+            for m in self.yara.match_bytes(data):
+                detections.append(
+                    Detection(
+                        detector="yara",
+                        name=m["rule"],
+                        severity=m["severity"],
+                        details={"tags": ",".join(m["tags"])},
+                    )
+                )
+        except OSError:
+            pass
+        finally:
+            os.close(dup)
+
+        result.detections = detections
+        result.verdict = self._verdict(detections, None)
+        return result
+
     def _scan_file(self, path: str, depth: int) -> FileScanResult:
         result = FileScanResult(path=path)
         try:

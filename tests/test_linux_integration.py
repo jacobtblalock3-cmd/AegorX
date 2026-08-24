@@ -70,7 +70,10 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     def decide(event):
         verdict = None
         try:
-            verdict = engine.scan_file(event.path).verdict
+            if event.dup_fd is not None:
+                verdict = engine.scan_file_descriptor(event.dup_fd, event.path).verdict
+            else:
+                verdict = engine.scan_file(event.path).verdict
         except Exception as exc:
             decisions.append(("scan-error", str(exc)[:120]))
             print(f"[fanotify-test] scan error: {exc}", flush=True)

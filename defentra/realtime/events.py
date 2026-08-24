@@ -16,6 +16,10 @@ class FileEvent:
     path: str
     kind: str
     pid: int = 0
+    # fanotify permission events carry a kernel-provided open descriptor.
+    # Deciders should scan via this fd (engine.scan_file_descriptor) instead
+    # of re-opening the path, which would self-deadlock the reader thread.
+    dup_fd: Optional[int] = None
 
 
 class PathFilter:

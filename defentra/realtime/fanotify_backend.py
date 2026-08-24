@@ -200,11 +200,18 @@ class FanotifyBackend(BackendBase):
                 self._respond(fd, True)
                 return
             allowed = True
+            dup_fd = None
             try:
                 st = os.fstat(fd)
                 if stat.S_ISREG(st.st_mode):
                     path = self._path_of(fd)
-                    event = FileEvent(path=path, kind="open_perm", pid=meta["pid"])
+                    # Hand the decider a private copy of the kernel-provided
+                    # descriptor; scanning it must never re-open the path.
+                    try:
+                        dup_fd = os.dup(fd)
+                    except OSError:
+                        dup_fd = None
+                    event = FileEvent(path=path, kind="open_perm", pid=meta["pid"], dup_fd=dup_fd)
                     if self.decide is not None:
                         try:
                             allowed = bool(self.decide(event))
@@ -212,6 +219,12 @@ class FanotifyBackend(BackendBase):
                             allowed = True
             except OSError:
                 allowed = True
+            finally:
+                if dup_fd is not None:
+                    try:
+                        os.close(dup_fd)
+                    except OSError:
+                        pass
             self._respond(fd, allowed)
         finally:
             if fd >= 0:
