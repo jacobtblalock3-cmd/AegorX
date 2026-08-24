@@ -259,9 +259,12 @@ def run_training(
 
 
 def _resolve_split(data_dir: str, kind: str) -> List[str]:
-    primary = sorted(glob.glob(os.path.join(data_dir, f"{kind}_features_*.jsonl")))
+    # Recursive: archives commonly nest the JSONL parts one or more levels deep.
+    primary = sorted(glob.glob(os.path.join(data_dir, "**", f"{kind}_features_*.jsonl"), recursive=True))
     fallback = [
-        p for p in sorted(glob.glob(os.path.join(data_dir, f"{kind}*.jsonl"))) if p not in primary
+        p
+        for p in sorted(glob.glob(os.path.join(data_dir, "**", f"{kind}*.jsonl"), recursive=True))
+        if p not in primary
     ]
     paths = primary or fallback
     if not paths:
