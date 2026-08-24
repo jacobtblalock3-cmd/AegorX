@@ -147,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     protect_sub.add_parser("seal", help="pin current hashes of trusted keys and agent config")
     protect_sub.add_parser("check", help="verify trust anchors against the sealed manifest")
 
+    sub.add_parser("ui", help="terminal dashboard (minimal, floating-button console)")
+
     return parser
 
 
@@ -416,13 +418,21 @@ def cmd_feed(args) -> int:
                 return EXIT_CLEAN
             db = SignatureDB(getattr(args, "db", None))
             added = apply_feed(db, doc)
+            rules_summary = ""
+            try:
+                from defentra.rules_store import install_rules
+
+                installed = install_rules(doc.get("rules"))
+                rules_summary = f"; rules installed={installed['installed']} removed={installed['removed']}"
+            except Exception as exc:
+                rules_summary = f"; rules NOT updated ({exc})"
             record_applied(doc)
         except FeedError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ERROR
         print(
             f"feed verified (key {fingerprint}); applied {added} new signature(s) "
-            f"from {source_desc}; total={db.count()}"
+            f"from {source_desc}; total={db.count()}{rules_summary}"
         )
         return EXIT_CLEAN
     print("no feed subcommand given; use: sign | verify | update", file=sys.stderr)
@@ -589,6 +599,12 @@ def cmd_protect(args) -> int:
     return EXIT_ERROR
 
 
+def cmd_ui(args) -> int:
+    from defentra import tui
+
+    return tui.main()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -608,6 +624,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "admin": cmd_admin,
         "watchdog": cmd_watchdog,
         "protect": cmd_protect,
+        "ui": cmd_ui,
     }
     handler = handlers.get(args.command)
     if handler is None:

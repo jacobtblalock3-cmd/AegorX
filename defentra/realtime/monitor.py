@@ -217,8 +217,23 @@ class RealTimeMonitor:
             flush=True,
         )
         try:
-            while not self._stop_evt.wait(timeout=3600.0):
-                pass
+            while not self._stop_evt.wait(timeout=300.0):
+                try:
+                    if self.engine.yara.maybe_reload():
+                        print(
+                            f"[realtime] reloaded YARA rules"
+                            f" ({self.engine.yara.rule_count} active)",
+                            flush=True,
+                        )
+                        self._log(
+                            {
+                                "ts": time.time(),
+                                "event": "rules-reloaded",
+                                "count": self.engine.yara.rule_count,
+                            }
+                        )
+                except Exception as exc:
+                    self._log({"ts": time.time(), "event": "reload-error", "detail": str(exc)[:200]})
         except KeyboardInterrupt:
             print("\n[realtime] shutting down...", file=sys.stderr, flush=True)
         finally:

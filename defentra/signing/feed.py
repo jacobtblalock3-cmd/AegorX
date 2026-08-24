@@ -35,6 +35,8 @@ from defentra.utils import state_dir
 FEED_FORMAT = "defentra-signature-feed"
 FEED_VERSION = 1
 MAX_FEED_BYTES = 32 * 1024 * 1024
+MAX_RULES_PER_FEED = 500
+MAX_RULE_SOURCE_BYTES = 512 * 1024
 DEFAULT_FEED_URL = (
     "https://github.com/jacobtblalock3-cmd/defentra/"
     "releases/download/signature-feed/signatures.json"
@@ -47,6 +49,49 @@ class FeedError(RuntimeError):
 
 class FeedExpired(FeedError):
     pass
+
+
+def sanitize_rule_entries(entries) -> List:
+    """Validate a feed 'rules' array; returns normalized entries or raises.
+
+    Rules are covered by the feed's Ed25519 signature like every other field;
+    this pass additionally enforces structural limits and source/sha256
+    agreement so a compromised publisher cannot ship oversized or mislabeled
+    rule bodies.
+    """
+    import hashlib as _hashlib
+
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        raise FeedError("feed 'rules' must be an array")
+    if len(entries) > MAX_RULES_PER_FEED:
+        raise FeedError(f"too many rules in feed (>{MAX_RULES_PER_FEED})")
+    out: List[Dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise FeedError("rule entry must be an object")
+        name = str(entry.get("name", "")).strip()
+        source = entry.get("source")
+        digest = str(entry.get("sha256", "")).strip().lower()
+        severity_raw = entry.get("severity", 5)
+        try:
+            severity = min(10, max(0, int(severity_raw)))
+        except (TypeError, ValueError):
+            raise FeedError(f"rule '{name}' has invalid severity")
+        if not name or len(name) > 128:
+            raise FeedError("rule entry missing or overlong name")
+        if not isinstance(source, str) or not source.strip():
+            raise FeedError(f"rule '{name}' has empty source")
+        if len(source.encode("utf-8")) > MAX_RULE_SOURCE_BYTES:
+            raise FeedError(f"rule '{name}' exceeds source size cap")
+        actual = _hashlib.sha256(source.encode("utf-8")).hexdigest()
+        if digest and digest != actual:
+            raise FeedError(f"rule '{name}' body does not match its published sha256")
+        out.append(
+            {"name": name, "source": source, "sha256": actual, "severity": severity}
+        )
+    return out
 
 
 def utc_now_iso() -> str:
@@ -75,18 +120,26 @@ def _safe_canonical(doc) -> bytes:
         raise FeedError(f"feed document is not JSON-serializable: {exc}") from exc
 
 
-def new_feed(signatures: List[Dict], ttl_hours: int = 720) -> Dict:
-    """Build an unsigned feed document from raw signature entries."""
+def new_feed(
+    signatures: List[Dict],
+    rules: Optional[List[Dict]] = None,
+    ttl_hours: int = 720,
+) -> Dict:
+    """Build an unsigned feed document from signature and (optional) rule entries."""
     from datetime import timedelta
 
     generated = datetime.now(timezone.utc)
-    return {
+    doc: Dict = {
         "format": FEED_FORMAT,
         "feed_version": FEED_VERSION,
         "generated_utc": generated.isoformat(timespec="seconds"),
         "expires_utc": (generated + timedelta(hours=ttl_hours)).isoformat(timespec="seconds"),
         "signatures": signatures,
     }
+    normalized = sanitize_rule_entries(rules)
+    if normalized:
+        doc["rules"] = normalized
+    return doc
 
 
 def sign_document(doc: Dict, private_key_path: str) -> Dict:

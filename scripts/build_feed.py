@@ -32,6 +32,41 @@ from defentra.signing.feed import new_feed, save_feed, sign_document
 FEED_ENTRY_FIELDS = ("sha256", "md5", "sha1", "name", "family", "severity")
 
 
+def _rule_entries(globs: Optional[List[str]]) -> List[Dict]:
+    """Embed .yar/.yara sources as feed rules with content hashes."""
+    import glob as _glob
+    import hashlib as _hashlib
+
+    if not globs:
+        return []
+    rules: Dict[str, Dict] = {}
+    for pattern in globs:
+        for path in sorted(_glob.glob(pattern)):
+            if not os.path.isfile(path) or not path.endswith((".yar", ".yara")):
+                continue
+            with open(path, "r", encoding="utf-8") as fh:
+                source = fh.read()
+            name = os.path.splitext(os.path.basename(path))[0]
+            digest = _hashlib.sha256(source.encode("utf-8")).hexdigest()
+            severity = 5
+            for line in source.splitlines():
+                stripped = line.strip().lower()
+                if stripped.startswith("severity"):
+                    _, _, value = stripped.partition("=")
+                    try:
+                        severity = min(10, max(0, int(value.strip().rstrip("\"'"))))
+                    except ValueError:
+                        pass
+                    break
+            rules[digest] = {
+                "name": f"file.{name}",
+                "source": source,
+                "sha256": digest,
+                "severity": severity,
+            }
+    return sorted(rules.values(), key=lambda r: r["name"])
+
+
 def _db_entries() -> List[Dict]:
     """Builtin seeds via a throwaway in-memory database."""
     db = SignatureDB(":memory:")
@@ -77,8 +112,16 @@ def collect_entries(extra_paths: Optional[List[str]] = None) -> List[Dict]:
     return sorted(merged.values(), key=lambda e: e["sha256"])
 
 
-def build_feed(extra_paths: Optional[List[str]] = None, ttl_hours: int = 168) -> Dict:
-    return new_feed(collect_entries(extra_paths), ttl_hours=ttl_hours)
+def build_feed(
+    extra_paths: Optional[List[str]] = None,
+    ttl_hours: int = 168,
+    rules_globs: Optional[List[str]] = None,
+) -> Dict:
+    return new_feed(
+        collect_entries(extra_paths),
+        rules=_rule_entries(rules_globs),
+        ttl_hours=ttl_hours,
+    )
 
 
 def main() -> int:
@@ -86,10 +129,13 @@ def main() -> int:
     parser.add_argument("--out", required=True, help="output path for the (signed) feed")
     parser.add_argument("--key", default=None, help="Ed25519 private key PEM; omit for unsigned draft")
     parser.add_argument("--extra", action="append", default=None, help="curated signatures JSON (repeatable)")
+    parser.add_argument("--rules-glob", action="append", default=None, dest="rules_glob", help="YARA rule file/glob to embed (repeatable)")
     parser.add_argument("--ttl-hours", type=int, default=168, help="feed validity window (default 7 days)")
     args = parser.parse_args()
 
-    doc = build_feed(args.extra, ttl_hours=args.ttl_hours)
+    doc = build_feed(args.extra, ttl_hours=args.ttl_hours, rules_globs=args.rules_glob)
+    if args.rules_glob:
+        print(f"[feed] embedded {len(doc.get('rules', []))} YARA rule(s)")
     if args.key:
         doc = sign_document(doc, args.key)
         print(f"[feed] signed with {args.key}")

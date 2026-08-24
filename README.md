@@ -81,7 +81,7 @@ sudo defentra monitor / --exclude '/mnt/nfs/*' --exclude '*.iso'
 | `inotify`  | any user   | Scans on close-write/move; quarantines detected threats          |
 | `auto`     | —          | fanotify when running as root on Linux, else inotify             |
 
-Detections print to the console and append to a JSONL audit log
+Detections print to the console and append to a hash-chained audit log
 (`~/.defentra/realtime.log` by default). Run persistently with the provided
 unit file:
 
@@ -90,11 +90,29 @@ sudo cp packaging/systemd/defentra-monitor.service /etc/systemd/system/
 sudo systemctl enable --now defentra-monitor
 ```
 
+### Terminal dashboard
+
+```bash
+defentra ui
+```
+
+A minimal Linux-console experience: rounded panels over a dark canvas,
+engine/protection/quarantine status at a glance, recent detections in the
+left pane, and a row of **floating action buttons** along the bottom —
+`[S]can`, `[F]eed update`, `[R]ules`, `[P]rotect`, `[W]atchdog`, `[Q]uit` —
+rendered with drop-shadows so they hover above the interface. Keyboard-first
+(press the highlighted letter) with mouse-click support where the terminal
+allows it.
+
 ### Signature feed updates
 
 Threat intelligence ships as **signed feeds** (Ed25519). Every install trusts
 the bundled root key (`defentra/signing/trusted_keys/`); feeds are verified,
-expiry-checked, and replay-protected before a single signature touches your DB:
+expiry-checked, and replay-protected before a single signature touches your
+DB. Feeds also carry **YARA rules** — the daily build embeds the current
+ruleset, and `feed update` swaps it in atomically (compile-validated first),
+so detection content improves on every machine without upgrading Defentra
+itself. Running monitors hot-reload the new rules automatically:
 
 ```bash
 defentra feed update                     # fetch official feed, verify, apply

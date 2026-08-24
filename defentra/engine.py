@@ -61,7 +61,13 @@ class ScanEngine:
         max_file_size: int = DEFAULT_MAX_FILE_SIZE,
     ):
         self.db = SignatureDB(db_path)
-        self.yara = YaraScanner(rules_dirs or DEFAULT_RULES_DIRS)
+        dirs = list(rules_dirs) if rules_dirs is not None else list(DEFAULT_RULES_DIRS)
+        from defentra.rules_store import rules_dir as state_rules_dir
+
+        state_dir_path = state_rules_dir()
+        if state_dir_path not in dirs:
+            dirs.append(state_dir_path)
+        self.yara = YaraScanner(dirs)
         self.max_file_size = max_file_size
         self.fast_backend = FAST_BACKEND
         self.classifier = None

@@ -17,27 +17,62 @@ class YaraScanner:
 
     def __init__(self, rules_dirs: Optional[List[str]] = None, timeout: int = 60):
         self.timeout = timeout
+        self.rules_dirs = list(rules_dirs or [])
+        self._sources_mtime = 0.0
         self.rules = None
         self.rule_count = 0
-        if not YARA_AVAILABLE or not rules_dirs:
-            return
+        if YARA_AVAILABLE and self.rules_dirs:
+            self._compile()
+
+    def _collect_sources(self) -> Dict[str, str]:
         sources = {}
-        for rules_dir in rules_dirs:
+        latest_mtime = 0.0
+        for rules_dir in self.rules_dirs:
             if not os.path.isdir(rules_dir):
                 continue
             for fname in sorted(os.listdir(rules_dir)):
                 if fname.endswith((".yar", ".yara")):
                     fpath = os.path.join(rules_dir, fname)
                     try:
+                        mtime = os.path.getmtime(fpath)
+                        latest_mtime = max(latest_mtime, mtime)
                         with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
                             sources[f"{fname}:{len(sources)}"] = fh.read()
                     except OSError:
                         continue
-        if not sources:
-            return
+        self._sources_mtime = latest_mtime
+        return sources
+
+    def _compile(self) -> None:
+        sources = self._collect_sources()
         combined = "\n".join(sources.values())
-        self.rules = yara.compile(source=combined)
-        self.rule_count = len(sources)
+        if not combined.strip():
+            return
+        try:
+            self.rules = yara.compile(source=combined)
+            self.rule_count = len(sources)
+        except yara.Error:
+            self.rules = None
+            self.rule_count = 0
+
+    def maybe_reload(self) -> bool:
+        """Recompile when any rule file changed on disk; returns True if reloaded."""
+        if not (YARA_AVAILABLE and self.rules_dirs):
+            return False
+        latest = 0.0
+        for rules_dir in self.rules_dirs:
+            if not os.path.isdir(rules_dir):
+                continue
+            try:
+                for fname in os.listdir(rules_dir):
+                    if fname.endswith((".yar", ".yara")):
+                        latest = max(latest, os.path.getmtime(os.path.join(rules_dir, fname)))
+            except OSError:
+                continue
+        if latest <= self._sources_mtime:
+            return False
+        self._compile()
+        return True
 
     @property
     def available(self) -> bool:
