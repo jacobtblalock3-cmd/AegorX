@@ -92,12 +92,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp artifacts/malware-ember.lgbm defentra-ember-reference.lgbm
-          cp artifacts/malware-ember.lgbm.json defentra-ember-reference.lgbm.meta.json
+          cp artifacts/malware-ember.lgbm.meta.json defentra-ember-reference.lgbm.meta.json
           TAG=reference-model
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes --cleanup-tag
           fi
-          AUC=$(python3 -c "import json;print(json.load(open('artifacts/malware-ember.lgbm.json'))['test_auc'])")
+          AUC=$(python3 -c "import json;print(json.load(open('artifacts/malware-ember.lgbm.meta.json'))['test_auc'])")
           gh release create "$TAG" \
             defentra-ember-reference.lgbm \
             defentra-ember-reference.lgbm.meta.json \
