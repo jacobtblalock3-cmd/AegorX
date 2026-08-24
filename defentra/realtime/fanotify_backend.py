@@ -29,8 +29,9 @@ FAN_MARK_MOUNT = 0x10
 FAN_MARK_IGNORED_MASK = 0x20
 FAN_MARK_IGNORED_SURV_MODIFY = 0x40
 
-FAN_ALLOW = 1
-FAN_DENY = 2
+# fanotify(7): struct fanotify_response.response must be one of these bits.
+FAN_ALLOW = 0x10
+FAN_DENY = 0x20
 FAN_Q_OVERFLOW = 0x4000
 
 AT_FDCWD = -100
@@ -75,7 +76,14 @@ class FanotifyBackend(BackendBase):
         self._thread: Optional[threading.Thread] = None
         self._stop_evt = threading.Event()
         self._libc = None
-        self.counters = {"events": 0, "responses": 0, "denied": 0, "allowed": 0, "self_allowed": 0}
+        self.counters = {
+            "events": 0,
+            "responses": 0,
+            "denied": 0,
+            "allowed": 0,
+            "self_allowed": 0,
+            "response_errors": 0,
+        }
         self._pid = os.getpid()
         self._trusted_pids: set = set()
 
@@ -216,9 +224,13 @@ class FanotifyBackend(BackendBase):
         self.counters["responses"] += 1
         self.counters["allowed" if allow else "denied"] += 1
         try:
-            os.write(self._fd, RESPONSE_STRUCT.pack(fd, response))
+            written = os.write(self._fd, RESPONSE_STRUCT.pack(fd, response))
+            if written != RESPONSE_STRUCT.size:
+                self.counters["response_errors"] += 1
         except OSError:
-            pass
+            # A dropped response leaves the opener blocked until kernel
+            # timeout; surface it instead of failing silently.
+            self.counters["response_errors"] += 1
 
     @staticmethod
     def _path_of(fd: int) -> str:
