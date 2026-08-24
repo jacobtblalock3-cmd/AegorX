@@ -12,7 +12,8 @@ from typing import Callable, Optional
 from defentra.utils import ensure_dir
 
 DEFAULT_MODEL_URL = (
-    "https://github.com/jacobtblalock3-cmd/defentra/releases/latest/download/defentra-ember-reference.lgbm"
+    "https://github.com/jacobtblalock3-cmd/defentra/"
+    "releases/download/reference-model/defentra-ember-reference.lgbm"
 )
 DEFAULT_INSTALL_NAME = "malware.lgbm"
 META_SUFFIX = ".meta.json"

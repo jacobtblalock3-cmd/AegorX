@@ -4,16 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       dataset_url:
-        description: "URL of a RAW EMBER 2018 archive (must contain train/test JSONL records; vector-only mirrors are not trainable)"
+        description: "URL of the EMBER 2018 archive (JSONL records with full feature groups + labels)"
         required: false
         default: "https://ember.elastic.co/ember_dataset.tar.bz2"
       rounds:
         description: "LightGBM boosting rounds"
         required: false
         default: "500"
+      max_per_class:
+        description: "Training cap per class (0 = use everything)"
+        required: false
+        default: "300000"
+      publish:
+        description: "Publish artifacts to the reference-model release"
+        required: false
+        default: "true"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: train-model
+  cancel-in-progress: false
 
 jobs:
   train:
@@ -47,27 +59,16 @@ jobs:
           tar -xjf ember.tar.bz2 -C ember
           find ember -type f -name '*.jsonl' -exec ls -lh {} \;
 
-      - name: Locate raw train/test splits
-        run: |
-          TRAIN=$(find ember -type f -name 'train*.jsonl' ! -name '*features*' | head -1)
-          TEST=$(find ember -type f -name 'test*.jsonl' ! -name '*features*' | head -1)
-          if [ -z "$TRAIN" ] || [ -z "$TEST" ]; then
-            echo "::error::No RAW EMBER record files (train*.jsonl / test*.jsonl) in the archive."
-            echo "::error::Vector-only mirrors (e.g. ember.elastic.co train_features_*) are NOT trainable by Defentra."
-            echo "::error::See models/README.md for sources of the original raw dataset, or pass a"
-            echo "::error::dataset_url workflow input pointing at a raw archive."
-            exit 1
-          fi
-          echo "TRAIN=$TRAIN" >> "$GITHUB_ENV"
-          echo "TEST=$TEST" >> "$GITHUB_ENV"
-
       - name: Train
         run: |
+          CAP="${{ github.event.inputs.max_per_class }}"
+          if [ "$CAP" = "0" ]; then CAPARG=""; else CAPARG="--max-per-class $CAP"; fi
           python scripts/train_ember.py \
-            --train "$TRAIN" --test "$TEST" \
+            --data-dir ember \
             --out-dir artifacts \
             --sign-key signing_private.pem \
-            --rounds "${{ github.event.inputs.rounds }}"
+            --rounds "${{ github.event.inputs.rounds }}" \
+            $CAPARG
 
       - name: Verify artifact integrity
         run: |
@@ -85,9 +86,21 @@ jobs:
           path: artifacts/
           if-no-files-found: error
 
-      - name: Publishing instructions
+      - name: Publish rolling reference-model release
+        if: github.event.inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Publish manually (requires release rights):"
-          echo "  gh release create <tag> --draft --title 'Reference model' --notes 'EMBER-trained, see models/README.md'"
-          echo "  cp artifacts/malware-ember.lgbm defentra-ember-reference.lgbm"
-          echo "  gh release upload <tag> defentra-ember-reference.lgbm artifacts/malware-ember.lgbm.meta.json"
+          cp artifacts/malware-ember.lgbm defentra-ember-reference.lgbm
+          cp artifacts/malware-ember.lgbm.json defentra-ember-reference.lgbm.meta.json
+          TAG=reference-model
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+          AUC=$(python3 -c "import json;print(json.load(open('artifacts/malware-ember.lgbm.json'))['test_auc'])")
+          gh release create "$TAG" \
+            defentra-ember-reference.lgbm \
+            defentra-ember-reference.lgbm.meta.json \
+            artifacts/SHA256SUMS \
+            --title "Defentra reference model (EMBER-2018)" \
+            --notes "LightGBM static classifier trained on EMBER-2018. Held-out ROC-AUC: $AUC. Verify model_sha256 via SHA256SUMS; metadata sidecar is Ed25519-signed. Install with: defentra model install"

@@ -21,6 +21,9 @@ API = f"https://api.github.com/repos/{REPO}"
 
 
 def api(method: str, path: str, token: str, payload=None):
+    url = f"{API}{path}"
+    if not url.startswith("https://"):
+        raise ValueError(f"refusing non-HTTPS API URL: {url}")
     req = urllib.request.Request(
         f"{API}{path}",
         method=method,
@@ -31,7 +34,8 @@ def api(method: str, path: str, token: str, payload=None):
         },
         data=json.dumps(payload).encode() if payload else None,
     )
-    with urllib.request.urlopen(req) as resp:
+    # URL is validated to start with https:// above; API host is hardcoded.
+    with urllib.request.urlopen(req) as resp:  # nosec B310
         body = resp.read()
     return json.loads(body) if body else {}
 
