@@ -47,10 +47,9 @@ jobs:
               return fd
 
           classes = [v for k, v in NAMES.items() if k in ("NOTIF", "CONTENT", "PRE_CONTENT")]
-          for cname, cval in NAMES.items():
-              base = attempt(f"[{cname}] bare", cval)
+          for cval, cname in NAMES.items():
+              attempt(f"[{cname}] bare", cval)
               for fname, fval in FLAGS.items():
                   attempt(f"[{cname}] +{fname}", cval | fval)
-              # classic production combo
               attempt(f"[{cname}] CLOEXEC|UNLIMITED_QUEUE", cval | 0x00800000 | 0x00001000)
           PY
