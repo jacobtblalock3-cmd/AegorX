@@ -104,13 +104,48 @@ def roc_auc(y_true: List[int], scores: List[float]) -> float:
     return (rank_sum - pos * (pos + 1) / 2) / (pos * neg)
 
 
-def _default_model_factory(params: dict):
-    try:
+class _NativeBooster:
+    """sklearn-style fit/predict_proba/save_model over LightGBM's native API.
+
+    Keeps scikit-learn out of the [ml] extra — inference (ml/classifier.py)
+    also uses the native booster, so training and deployment stay aligned.
+    """
+
+    def __init__(self, params: dict):
+        self._rounds = params["n_estimators"]
+        self._params = {
+            "objective": params.get("objective", "binary"),
+            "learning_rate": params["learning_rate"],
+            "num_leaves": params["num_leaves"],
+            "min_data_in_leaf": params["min_child_samples"],
+            "feature_fraction": params["colsample_bytree"],
+            "bagging_fraction": params["subsample"],
+            "bagging_freq": params["subsample_freq"],
+            "verbose": -1,
+        }
+        self.booster = None
+
+    def fit(self, X, y):
         import lightgbm as lgb
-    except ImportError:
-        print("error: install ML deps first: pip install 'defentra[ml]'", file=sys.stderr)
-        raise SystemExit(3)
-    return lgb.LGBMClassifier(**params)
+
+        dtrain = lgb.Dataset(X, label=y)
+        self.booster = lgb.train(self._params, dtrain, num_boost_round=self._rounds)
+        return self
+
+    def predict_proba(self, X):
+        import numpy as np
+
+        positive = self.booster.predict(X)
+        return np.column_stack([1.0 - positive, positive])
+
+    def save_model(self, path: str) -> None:
+        self.booster.save_model(path)
+
+
+def _default_model_factory(params: dict):
+    import lightgbm as lgb  # noqa: F401  (fail fast with a clear message)
+
+    return _NativeBooster(params)
 
 
 def _proba_column(proba) -> List[float]:
