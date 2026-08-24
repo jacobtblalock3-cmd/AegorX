@@ -20,19 +20,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      # dist/ holds ONLY Python distributions (wheel + sdist) — it is fed
+      # straight to PyPI. Everything release-specific (deb, checksums) is
+      # staged in release-assets/ for the GitHub Release.
       - name: Build sdist and wheel
         run: |
           pip install build
           python -m build
 
       - name: Build .deb package
-        run: bash scripts/build_deb.sh dist
-
-      - name: Checksums
-        run: |
-          cd dist
-          sha256sum * > SHA256SUMS
-          cat SHA256SUMS
+        run: bash scripts/build_deb.sh release-assets
 
       - name: Install smoke test
         run: |
@@ -48,11 +45,24 @@ jobs:
           PY
           echo "smoke ok"
 
+      - name: Stage release assets
+        run: |
+          (
+            cd dist && sha256sum *.whl *.tar.gz > dist.sum
+            cd ../release-assets && sha256sum * > deb.sum
+            cd .. && cat dist/dist.sum release-assets/deb.sum > SHA256SUMS
+            rm dist/dist.sum release-assets/deb.sum
+          )
+          cp SHA256SUMS release-assets/SHA256SUMS
+          cat release-assets/SHA256SUMS
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: defentra-release-${{ github.ref_name }}
-          path: dist/
+          path: |
+            dist/
+            release-assets/
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -60,7 +70,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            dist/* \
+            release-assets/* \
+            dist/*.whl \
+            dist/*.tar.gz \
             --title "Defentra $GITHUB_REF_NAME" \
             --notes "Automated release of $GITHUB_REF_NAME. Verify with SHA256SUMS; feeds and models are Ed25519-signed."
 
@@ -73,12 +85,6 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::notice::PYPI_API_TOKEN not set - skipping PyPI publish (GitHub Release still published)"
           fi
-
-      - name: Prepare PyPI uploads
-        run: |
-          # SHA256SUMS ships with the GitHub Release; twine rejects non-distributions.
-          rm -f dist/SHA256SUMS
-          ls dist/
 
       - name: Publish to PyPI
         if: steps.pypi_check.outputs.available == 'true'
