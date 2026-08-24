@@ -149,10 +149,17 @@ def _default_model_factory(params: dict):
 
 
 def _proba_column(proba) -> List[float]:
-    rows = list(proba)
-    if rows and isinstance(rows[0], (list, tuple)):
-        return [float(row[1]) for row in rows]
-    return [float(p) for p in rows]
+    """Accept 1-D positive-class scores or (n,2) proba matrices; return column."""
+    import numpy as np
+
+    arr = np.asarray(proba, dtype=np.float64)
+    if arr.ndim == 2:
+        if arr.shape[1] < 2:
+            raise ValueError("probability matrix must have a positive-class column")
+        arr = arr[:, 1]
+    elif arr.ndim != 1:
+        raise ValueError(f"unexpected probability shape {arr.shape}")
+    return [float(x) for x in arr]
 
 
 def _collect(paths, X: list, y: list, max_per_class: Optional[int]) -> dict:
