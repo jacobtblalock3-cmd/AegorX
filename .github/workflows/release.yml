@@ -34,6 +34,14 @@ jobs:
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Install smoke test
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/defentra --version
+          /tmp/smoke/bin/defentra scan --help >/dev/null
+          echo "smoke ok"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -50,7 +58,18 @@ jobs:
             --title "Defentra $GITHUB_REF_NAME" \
             --notes "Automated release of $GITHUB_REF_NAME. Verify with SHA256SUMS; feeds and models are Ed25519-signed."
 
+      - name: Check PyPI credentials
+        id: pypi_check
+        run: |
+          if [ -n "${{ secrets.PYPI_API_TOKEN }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PYPI_API_TOKEN not set - skipping PyPI publish (GitHub Release still published)"
+          fi
+
       - name: Publish to PyPI
+        if: steps.pypi_check.outputs.available == 'true'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
