@@ -79,3 +79,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
+          # SHA256SUMS lives in dist/ for the GitHub Release; PyPI only gets real distributions.
+          packages: "dist/*.whl dist/*.tar.gz"
