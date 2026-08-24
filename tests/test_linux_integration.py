@@ -95,12 +95,19 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     )
 
     def external_open(path):
-        proc = subprocess.run(
-            [sys.executable, "-c", opener, str(path)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", opener, str(path)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as exc:
+            print(
+                f"[fanotify-test] TIMEOUT opening {path}; counters={backend.counters}",
+                flush=True,
+            )
+            raise
         outcome = "DENIED" in proc.stdout and "OPENED" not in proc.stdout
         print(f"[fanotify-test] open {path} -> {'DENIED' if outcome else 'OPENED'}", flush=True)
         return outcome

@@ -184,6 +184,7 @@ class FanotifyBackend(BackendBase):
 
     def _handle(self, meta: dict) -> None:
         fd = meta["fd"]
+        self._debug(f"event pid={meta['pid']} mask={meta['mask']:#x} fd={fd}")
         try:
             if meta["mask"] & FAN_Q_OVERFLOW or fd < 0:
                 self._respond(fd, True)
@@ -219,18 +220,24 @@ class FanotifyBackend(BackendBase):
                 except OSError:
                     pass
 
+    def _debug(self, msg: str) -> None:
+        if os.environ.get("DEFENTRA_FANOTIFY_DEBUG"):
+            print(f"[fanotify-debug] {msg}", flush=True)
+
     def _respond(self, fd: int, allow: bool) -> None:
         response = FAN_ALLOW if allow else FAN_DENY
         self.counters["responses"] += 1
         self.counters["allowed" if allow else "denied"] += 1
         try:
             written = os.write(self._fd, RESPONSE_STRUCT.pack(fd, response))
+            self._debug(f"respond fd={fd} response={response:#x} written={written}")
             if written != RESPONSE_STRUCT.size:
                 self.counters["response_errors"] += 1
-        except OSError:
+        except OSError as exc:
             # A dropped response leaves the opener blocked until kernel
             # timeout; surface it instead of failing silently.
             self.counters["response_errors"] += 1
+            self._debug(f"respond fd={fd} FAILED: {exc}")
 
     @staticmethod
     def _path_of(fd: int) -> str:

@@ -33,6 +33,7 @@ jobs:
         env:
           DEFENTRA_HOME: /tmp/defentra-probe
           DEFENTRA_FANOTIFY_STRICT: "1"
+          DEFENTRA_FANOTIFY_DEBUG: "1"
         run: |
           set +e
           sudo --preserve-env=DEFENTRA_HOME,DEFENTRA_FANOTIFY_STRICT "$(which python)" \
