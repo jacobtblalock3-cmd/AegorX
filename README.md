@@ -39,7 +39,12 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 ### Detection flow per file
 
 1. **Hash lookup** — SHA-256 → SHA-1 → MD5 against the signature DB.
-2. **YARA rules** — compiled from `rules/` directories.
+2. **YARA rules** — compiled from `rules/` directories. The starter set ships
+   generic coverage for LOLBin cradles (PowerShell/certutil/mshta/regsvr32),
+   credential-dumping tooling, webshells (PHP/ASPX/JSP), ransomware note and
+   shadow-copy sabotage markers, obfuscated script droppers, and UPX packing
+   (informational). Every family has a positive fixture *and* a benign-corpus
+   false-positive gate in `tests/test_detection_content.py`.
 3. **ML classifier** — if the file is a PE/ELF and a trained model exists,
    ~35 static features (entropy, section flags, suspicious imports, NX/PIE, …)
    feed a LightGBM booster that outputs a malware probability.
