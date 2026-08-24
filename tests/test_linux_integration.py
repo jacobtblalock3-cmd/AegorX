@@ -107,7 +107,7 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
             )
         except subprocess.TimeoutExpired as exc:
             print(
-                f"[fanotify-test] TIMEOUT opening {path}; counters={backend.counters}",
+                f"[fanotify-test] TIMEOUT opening {path}; counters={backend.counters} decisions={decisions}",
                 flush=True,
             )
             raise

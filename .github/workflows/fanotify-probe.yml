@@ -36,7 +36,7 @@ jobs:
           DEFENTRA_FANOTIFY_DEBUG: "1"
         run: |
           set +e
-          sudo --preserve-env=DEFENTRA_HOME,DEFENTRA_FANOTIFY_STRICT "$(which python)" \
+          sudo --preserve-env=DEFENTRA_HOME,DEFENTRA_FANOTIFY_STRICT,DEFENTRA_FANOTIFY_DEBUG "$(which python)" \
             -m pytest tests/test_linux_integration.py::test_fanotify_denies_malicious_open \
             -v -s --capture=no > /tmp/probe.log 2>&1
           RC=$?
