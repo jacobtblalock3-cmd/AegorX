@@ -74,11 +74,14 @@ jobs:
             echo "::notice::PYPI_API_TOKEN not set - skipping PyPI publish (GitHub Release still published)"
           fi
 
+      - name: Prepare PyPI uploads
+        run: |
+          # SHA256SUMS ships with the GitHub Release; twine rejects non-distributions.
+          rm -f dist/SHA256SUMS
+          ls dist/
+
       - name: Publish to PyPI
         if: steps.pypi_check.outputs.available == 'true'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: dist/
-          # SHA256SUMS lives in dist/ for the GitHub Release; PyPI only gets real distributions.
-          packages: "dist/*.whl dist/*.tar.gz"
