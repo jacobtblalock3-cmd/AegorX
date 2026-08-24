@@ -1,13 +1,17 @@
-"""Core scan engine: orchestrates signature, YARA, and ML detectors."""
+"""Core scan engine: orchestrates signature, YARA, ML, archive, and macro detectors."""
 
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from defentra.ml.features import extract_features, looks_executable, vectorize
+from defentra.scanner import archives, office
+from defentra.scanner.archives import ArchiveLimits
 from defentra.scanner.hashes import FAST_BACKEND, file_hashes
 from defentra.scanner.yara_scanner import YaraScanner
 from defentra.signatures.db import SignatureDB
@@ -69,6 +73,7 @@ class ScanEngine:
             dirs.append(state_dir_path)
         self.yara = YaraScanner(dirs)
         self.max_file_size = max_file_size
+        self.archive_limits = ArchiveLimits()
         self.fast_backend = FAST_BACKEND
         self.classifier = None
         if enable_ml:
@@ -84,6 +89,8 @@ class ScanEngine:
             "yara_rules": self.yara.rule_count,
             "ml_model": bool(self.classifier and self.classifier.available),
             "hash_backend": self.fast_backend,
+            "archives": True,
+            "office_macros": office.OFFICE_AVAILABLE,
         }
 
     def scan_target(self, target: str, recursive: bool = True) -> List[FileScanResult]:
@@ -102,7 +109,10 @@ class ScanEngine:
         return results
 
     def scan_file(self, path: str) -> FileScanResult:
-        result = FileScanResult(path=os.path.abspath(path))
+        return self._scan_file(os.path.abspath(path), depth=0)
+
+    def _scan_file(self, path: str, depth: int) -> FileScanResult:
+        result = FileScanResult(path=path)
         try:
             result.size = os.path.getsize(path)
         except OSError as exc:
@@ -148,10 +158,13 @@ class ScanEngine:
 
         ml_prob: Optional[float] = None
         ml_failed = False
+        try:
+            with open(path, "rb") as fh:
+                head = fh.read(512)
+        except OSError:
+            head = b""
         if self.classifier is not None and self.classifier.available:
             try:
-                with open(path, "rb") as fh:
-                    head = fh.read(4)
                 if looks_executable(head):
                     feats = extract_features(path)
                     ml_prob = self.classifier.predict_proba(vectorize(feats))
@@ -159,6 +172,45 @@ class ScanEngine:
                 pass
             except Exception:
                 ml_failed = True
+
+        # Office documents: VBA macro risk analysis (also reached through
+        # archive entries, e.g. word/vbaProject.bin inside a .docx).
+        if office.looks_like_office(head):
+            office_detections = office.analyze_document(path)
+            if office_detections is None:
+                if not office.OFFICE_AVAILABLE and not detections:
+                    detections.append(
+                        Detection(
+                            detector="office",
+                            name="Document.MacroAnalysisUnavailable",
+                            severity=3,
+                            details={"hint": "pip install 'defentra[office]'"},
+                        )
+                    )
+            else:
+                for od in office_detections:
+                    detections.append(Detection("office", od["name"], od["severity"], od["details"]))
+
+        # Archives: bounded extraction, then recursive scan of the contents.
+        archive_note: Optional[str] = None
+        if archives.looks_like_archive(head):
+            if depth >= self.archive_limits.max_depth:
+                detections.append(
+                    Detection(
+                        detector="archive",
+                        name="Archive.NestedTooDeep",
+                        severity=3,
+                        details={"depth": depth, "limit": self.archive_limits.max_depth},
+                    )
+                )
+            else:
+                inner_detections, inner_probs, note = self._scan_archive_contents(path, depth)
+                detections.extend(inner_detections)
+                archive_note = note
+                if inner_probs:
+                    candidates = [p for p in (ml_prob, *inner_probs) if p is not None]
+                    ml_prob = max(candidates) if candidates else None
+
         result.ml_probability = ml_prob
         if ml_prob is not None:
             if ml_prob >= MALICIOUS_PROBABILITY:
@@ -182,10 +234,50 @@ class ScanEngine:
 
         result.detections = detections
         result.verdict = self._verdict(detections, ml_prob)
+        if archive_note and not detections:
+            result.verdict = "error"
+            result.error = f"archive {archive_note}"
         if ml_failed and result.verdict == "clean":
             result.verdict = "error"
             result.error = "feature extraction failed on malformed input"
         return result
+
+    def _scan_archive_contents(
+        self, path: str, depth: int
+    ) -> Tuple[List[Detection], List[float], Optional[str]]:
+        """Extract and scan one level of an archive.
+
+        Returns (detections prefixed with 'archive:', inner ML probabilities,
+        note). A non-None note means the container itself was unscannable.
+        """
+        workdir = tempfile.mkdtemp(prefix="defentra-arch-")
+        try:
+            try:
+                entries = archives.extract_archive(path, workdir, self.archive_limits)
+            except archives.ArchiveBomb as exc:
+                return (
+                    [Detection("archive", "Archive.BombSuspected", 6, {"detail": str(exc)})],
+                    [],
+                    None,
+                )
+            except archives.ArchiveError as exc:
+                return [], [], f"unscannable ({exc})"
+
+            collected: List[Detection] = []
+            probabilities: List[float] = []
+            for entry in entries:
+                inner = self._scan_file(entry.temp_path, depth + 1)
+                if inner.ml_probability is not None:
+                    probabilities.append(inner.ml_probability)
+                for d in inner.detections:
+                    details = {"entry": entry.name}
+                    details.update(d.details)
+                    collected.append(
+                        Detection(f"archive:{d.detector}", d.name, d.severity, details)
+                    )
+            return collected, probabilities, None
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
 
     @staticmethod
     def _verdict(detections: List[Detection], ml_prob: Optional[float]) -> str:

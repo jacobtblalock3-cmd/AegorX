@@ -31,6 +31,8 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 | ML         | LightGBM            | Static-feature malware classifier (PE + ELF)                 |
 | Model hub  | urllib              | Release-asset reference model, SHA256-verified install       |
 | Features   | Pure Python         | PE/ELF header parsing, section entropy, import analysis      |
+| Archives   | stdlib              | Bounded zip/tar/gz inspection: nested payloads, bomb guards  |
+| Office     | oletools (optional) | VBA macro risk analysis for OLE documents (`office` extra)   |
 | Quarantine | Fernet (optional)   | Encrypted vault with restore/audit trail                     |
 | Fast path  | Rust + PyO3         | Streaming SHA-256 for large files (`rust-core/`)             |
 
@@ -41,7 +43,16 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 3. **ML classifier** — if the file is a PE/ELF and a trained model exists,
    ~35 static features (entropy, section flags, suspicious imports, NX/PIE, …)
    feed a LightGBM booster that outputs a malware probability.
-4. **Verdict policy**
+4. **Archives** — zip, tar (+gz/bz2/xz), and single-file gzip payloads are
+   extracted under hard resource caps and every entry is scanned recursively
+   (nested archives up to depth 3). Zip-slip is structurally impossible:
+   entries are re-written under digest names. Compression-ratio and
+   byte-budget breaches raise `Archive.BombSuspected` instead of grinding.
+5. **Office macros** — OLE documents get VBA risk analysis when the optional
+   `office` extra is installed (`pip install 'defentra[office]'`): auto-exec
+   chains that combine an entrypoint with process execution score malicious;
+   risky APIs alone score suspicious; benign macros are noted info-level.
+6. **Verdict policy**
    - `malicious`: severity ≥ 8 or ML ≥ 0.85
    - `suspicious`: severity ≥ 5 or ML ≥ 0.60
    - `clean`: otherwise

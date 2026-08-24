@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "defentra"
-version = "0.5.0"
+version = "0.7.0"
 description = "Defentra - open-source AI-assisted antivirus engine"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -29,6 +29,7 @@ Security = "https://github.com/jacobtblalock3-cmd/defentra/blob/main/SECURITY.md
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
 ml = ["lightgbm>=4.0", "numpy>=1.23"]
+office = ["oletools>=0.40"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]
@@ -39,3 +40,12 @@ include = ["defentra*"]
 
 [tool.setuptools.package-data]
 "defentra.signing" = ["trusted_keys/*.pub"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # third-party import-time deprecations (oletools stack on older pyparsing)
+    "ignore::DeprecationWarning:colorclass.*",
+    "ignore::DeprecationWarning:olefile.*",
+    "ignore:.*deprecated.*:DeprecationWarning:oletools.*",
+    "ignore:.*deprecated.*",
+]

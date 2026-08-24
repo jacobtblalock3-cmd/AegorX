@@ -171,7 +171,11 @@ def cmd_scan(args) -> int:
         print(render_text(all_results, " ".join(args.paths), elapsed, color=not args.no_color))
         ml_state = "loaded" if caps["ml_model"] else "not found (train with scripts/train_model.py)"
         yara_state = f"{caps['yara_rules']} rule file(s)" if caps["yara_available"] else "unavailable (pip install yara-python)"
-        print(f"engines: signatures={caps['signature_db']} | yara={yara_state} | ml={ml_state} | hash={caps['hash_backend']}")
+        vba_state = "on" if caps["office_macros"] else "off (pip install 'defentra[office]')"
+        print(
+            f"engines: signatures={caps['signature_db']} | yara={yara_state} | ml={ml_state} "
+            f"| hash={caps['hash_backend']} | archives=zip,tar,gz | office-vba={vba_state}"
+        )
 
     if any(r.verdict == "malicious" for r in all_results):
         return EXIT_MALICIOUS

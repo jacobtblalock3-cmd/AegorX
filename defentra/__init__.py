@@ -1,6 +1,6 @@
 """Defentra - open-source AI-assisted antivirus engine."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from defentra.engine import Detection, FileScanResult, ScanEngine
 
