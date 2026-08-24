@@ -40,12 +40,15 @@ class MalwareClassifier:
         env_path = os.environ.get("DEFENTRA_MODEL")
         if env_path:
             yield env_path
+        from defentra.utils import state_dir
+
         search_dirs = []
         env_dir = os.environ.get("DEFENTRA_MODEL_DIR")
         if env_dir:
             search_dirs.append(env_dir)
         search_dirs.extend(
             [
+                os.path.join(state_dir(), "models"),
                 os.path.join(os.path.expanduser("~"), ".defentra", "models"),
                 os.path.join(os.path.dirname(__file__), "models"),
             ]
