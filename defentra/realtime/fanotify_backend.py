@@ -20,7 +20,10 @@ FAN_EVENT_ON_CHILD = 0x8000000
 FAN_ONDIR = 0x40000000
 FAN_CLOSE_WRITE = 0x8
 
-FAN_CLASS_CONTENT = 0x8
+# Canonical uapi/linux/fanotify.h values (verified against runner headers):
+# FAN_CLASS_CONTENT = 0x4 — the classic permission-event class. Note 0x8 is
+# FAN_CLASS_PRE_CONTENT, an entirely different (HSM-style) group type.
+FAN_CLASS_CONTENT = 0x4
 FAN_UNLIMITED_QUEUE = 0x10
 FAN_CLOEXEC = 0x1
 
@@ -29,9 +32,9 @@ FAN_MARK_MOUNT = 0x10
 FAN_MARK_IGNORED_MASK = 0x20
 FAN_MARK_IGNORED_SURV_MODIFY = 0x40
 
-# fanotify(7): struct fanotify_response.response must be one of these bits.
-FAN_ALLOW = 0x10
-FAN_DENY = 0x20
+# fanotify(7): struct fanotify_response.response — canonical uapi values.
+FAN_ALLOW = 0x1
+FAN_DENY = 0x2
 FAN_Q_OVERFLOW = 0x4000
 
 AT_FDCWD = -100
