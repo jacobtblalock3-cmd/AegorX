@@ -36,3 +36,6 @@ defentra = "defentra.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["defentra*"]
+
+[tool.setuptools.package-data]
+"defentra.signing" = ["trusted_keys/*.pub"]
