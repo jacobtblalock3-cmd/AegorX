@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -116,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     ag_pair = agent_sub.add_parser("pair", help="pair this machine with a management server (one-time)")
     ag_pair.add_argument("--server", required=True, help="management server URL")
     ag_pair.add_argument("--token", required=True, help="one-time pairing token from the console")
+    ag_pair.add_argument("--ca-cert", default=None, help="server cert / CA chain to pin for HTTPS (required off-host)")
     agent_sub.add_parser("run", help="start check-in loop (foreground; use systemd for production)")
     agent_sub.add_parser("status", help="show pairing/connection status")
 
@@ -125,8 +127,20 @@ def build_parser() -> argparse.ArgumentParser:
     ad_serve.add_argument("--host", default="127.0.0.1")
     ad_serve.add_argument("--port", type=int, default=8477)
     ad_serve.add_argument("--db", default=None, help="fleet database path (default: <state>/fleet.db)")
+    ad_serve.add_argument("--tls-cert", default=None, help="server certificate PEM (enables HTTPS)")
+    ad_serve.add_argument("--tls-key", default=None, help="server private key PEM")
+    ad_certs = admin_sub.add_parser("gen-certs", help="generate a self-signed TLS server certificate")
+    ad_certs.add_argument("--out", required=True, help="output directory for server.crt/server.key")
+    ad_certs.add_argument("--hostname", default=socket.gethostname(), help="DNS name clients will reach")
+    ad_certs.add_argument("--days", type=int, default=825)
     ad_enroll = admin_sub.add_parser("enroll-token", help="issue a one-time pairing token for a device")
     ad_enroll.add_argument("--name", required=True, help="unique device name")
+    ad_enroll.add_argument("--ttl-hours", type=float, default=24.0)
+    ad_revoke = admin_sub.add_parser("revoke", help="revoke a device's credentials immediately")
+    ad_revoke.add_argument("agent_name")
+    ad_policy = admin_sub.add_parser("policy", help="queue an apply-policy command for a device")
+    ad_policy.add_argument("agent_name")
+    ad_policy.add_argument("--file", required=True, help="policy JSON document")
     ad_agents = admin_sub.add_parser("agents", help="list managed devices and last-seen state")
     ad_send = admin_sub.add_parser("send", help="queue a command for a device")
     ad_send.add_argument("agent_name")
@@ -470,7 +484,7 @@ def cmd_agent(args) -> int:
         return EXIT_ERROR
     try:
         if command == "pair":
-            cfg = agent_mod.pair(args.server, args.token)
+            cfg = agent_mod.pair(args.server, args.token, ca_cert=getattr(args, "ca_cert", None))
             print(f"paired as {cfg['agent_id']}; admin key pinned")
             print("start the agent with: defentra agent run")
             return EXIT_CLEAN
@@ -507,15 +521,41 @@ def cmd_agent(args) -> int:
 def cmd_admin(args) -> int:
     from defentra.management.server import ManagementServer
 
-    server = ManagementServer(db_path=getattr(args, "db", None))
     command = getattr(args, "admin_command", None)
     if not command:
-        print("no admin subcommand given; use: serve | enroll-token | agents | send | results | detections", file=sys.stderr)
+        print(
+            "no admin subcommand given; use: serve | gen-certs | enroll-token | agents"
+            " | revoke | policy | send | results | detections",
+            file=sys.stderr,
+        )
         return EXIT_ERROR
 
+    if command == "gen-certs":
+        from defentra.management.certs import generate_server_cert
+
+        cert_path, key_path = generate_server_cert(
+            args.out, hostname=args.hostname, days=args.days
+        )
+        print(f"server certificate: {cert_path}")
+        print(f"server private key: {key_path}  (keep secret; chmod 600)")
+        print("serve TLS with:")
+        print(f"  defentra admin serve --host 0.0.0.0 --tls-cert {cert_path} --tls-key {key_path}")
+        print(f"clients pair with:  defentra agent pair --ca-cert {cert_path} ...")
+        return EXIT_CLEAN
+
+    server = ManagementServer(
+        db_path=getattr(args, "db", None),
+        tls_cert=getattr(args, "tls_cert", None),
+        tls_key=getattr(args, "tls_key", None),
+    )
+
     if command == "serve":
-        print(f"[admin] management server on {args.host}:{args.port} (fleet db ready)")
+        scheme = "https" if (args.tls_cert and args.tls_key) else "http"
+        scope = "" if args.host == "127.0.0.1" else " — off-host clients must use TLS"
+        print(f"[admin] management server on {scheme}://{args.host}:{args.port}{scope}")
         print("[admin] issue pairing tokens with: defentra admin enroll-token --name DEVICE")
+        if scheme == "http" and args.host != "127.0.0.1":
+            print("::warning:: serving plain HTTP on a non-loopback interface", file=sys.stderr)
         server.start_background()
         try:
             threading.Event().wait()
@@ -523,10 +563,40 @@ def cmd_admin(args) -> int:
             server.shutdown()
         return EXIT_CLEAN
     if command == "enroll-token":
-        token = server.issue_pairing_token(args.name)
-        print(f"pairing token for '{args.name}' (single use):\n{token}")
+        token = server.issue_pairing_token(args.name, ttl_hours=args.ttl_hours)
+        print(f"pairing token for '{args.name}' (single use, expires in {args.ttl_hours:g}h):\n{token}")
         print("on the device run:")
-        print(f"  defentra agent pair --server https://YOUR-CONSOLE:8477 --token {token}")
+        print(f"  defentra agent pair --server https://YOUR-CONSOLE:8477 --ca-cert server.crt --token {token}")
+        return EXIT_CLEAN
+    if command == "revoke":
+        ok = server.store.revoke(args.agent_name)
+        if ok:
+            print(f"revoked '{args.agent_name}': check-ins will be rejected immediately")
+            return EXIT_CLEAN
+        print(f"error: no active device named '{args.agent_name}'", file=sys.stderr)
+        return EXIT_ERROR
+    if command == "policy":
+        rows = [a for a in server.store.list_agents() if a["name"] == args.agent_name]
+        if not rows:
+            print(f"error: unknown device '{args.agent_name}'", file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            with open(args.file, "r", encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"error: cannot read policy file: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        from defentra.policy import validate_policy
+
+        try:
+            validate_policy(doc)
+        except Exception as exc:
+            print(f"error: invalid policy document: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        command_id = server.store.queue_command(
+            rows[0]["agent_id"], "apply-policy", doc, server.admin_private_key
+        )
+        print(f"queued policy push {command_id}; applies on the device's next check-in")
         return EXIT_CLEAN
     if command == "agents":
         print(json.dumps(server.store.list_agents(), indent=2))

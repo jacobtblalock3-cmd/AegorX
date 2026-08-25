@@ -176,24 +176,35 @@ security-operations commands.
 
 ```bash
 # --- console side -----------------------------------------------------------
-defentra admin serve --host 0.0.0.0 --port 8477      # run the console API
-defentra admin enroll-token --name workstation-01    # one-time pairing token
+defentra admin gen-certs --out /etc/defentra/tls --hostname console.corp
+defentra admin serve --host 0.0.0.0 --port 8477 \
+    --tls-cert /etc/defentra/tls/server.crt --tls-key /etc/defentra/tls/server.key
+defentra admin enroll-token --name workstation-01 --ttl-hours 8  # one-time token
 defentra admin agents                                # fleet status / last-seen
 defentra admin send workstation-01 scan-path --arg path=/home/alice
+defentra admin policy workstation-01 --file policy.json   # central exclusions/thresholds/schedule
+defentra admin revoke workstation-01                 # cut a device off immediately
 defentra admin results                               # command outcomes
 defentra admin detections                            # fleet-wide detections feed
 
 # --- client side (once, then as a service) ----------------------------------
-sudo defentra agent pair --server https://console.corp:8477 --token <TOKEN>
+sudo defentra agent pair --server https://console.corp:8477 \
+    --ca-cert server.crt --token <TOKEN>
 sudo systemctl enable --now defentra-agent
 ```
 
-Security properties: pairing is token-gated and single-use; every queued
-command is **Ed25519-signed by the console** and rejected by the agent if the
-signature fails or the command expired; both sides keep tamper-evident audit
-logs; agents authenticate with per-device tokens; the command set is scoped to
-security operations (`ping`, `status`, `diag`, `scan-path`, `feed-update`,
-`quarantine-list`, `quarantine-delete`) and is extensible only server-side.
+Security properties: pairing is token-gated, single-use, persisted server-side
+(survives restarts) and expires; every queued command is **Ed25519-signed by
+the console** and rejected by the agent if the signature fails or the command
+expired; both sides keep tamper-evident audit logs; agents authenticate with
+per-device bearer tokens that admins can **revoke instantly**; transport is
+TLS with the server certificate pinned client-side (`--ca-cert`); the command
+set is scoped to security operations plus signed `apply-policy` pushes and is
+extensible only server-side.
+
+**Central policy** (pushed via `admin policy`) controls per-device: scan
+exclusions, ML verdict thresholds, preferred kernel backend, and a scheduled
+deep-scan interval + paths executed by the agent between check-ins.
 
 ### Train your own ML detector
 

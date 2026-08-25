@@ -27,6 +27,7 @@ ALLOWED_COMMANDS = (
     "feed-update",
     "quarantine-list",
     "quarantine-delete",
+    "apply-policy",
 )
 
 

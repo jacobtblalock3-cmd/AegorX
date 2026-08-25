@@ -166,10 +166,21 @@ class RealTimeMonitor:
         self.quarantine_enabled = quarantine
         self.log_path = log_path
         self.vault = QuarantineVault()
-        all_excludes = default_excludes() + list(excludes or [])
+        # Central policy (if present) contributes exclusions + backend choice.
+        from defentra.policy import load_policy
+
+        policy = load_policy() or {}
+        all_excludes = (
+            default_excludes()
+            + [str(p) for p in (policy.get("exclusions") or [])]
+            + list(excludes or [])
+        )
         if log_path:
             all_excludes.append(os.path.abspath(log_path))
         self.filter = PathFilter(all_excludes)
+        # Explicit caller choice wins; otherwise central policy picks.
+        if backend == "auto" and policy.get("backend"):
+            backend = str(policy["backend"])
         self.backend = select_backend(backend, self.paths, excludes=all_excludes)
         self.pool = ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="defentra-scan")
         self._inflight = threading.BoundedSemaphore(max(16, workers * 4))

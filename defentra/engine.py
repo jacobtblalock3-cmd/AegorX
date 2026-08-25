@@ -75,6 +75,18 @@ class ScanEngine:
         self.max_file_size = max_file_size
         self.archive_limits = ArchiveLimits()
         self.fast_backend = FAST_BACKEND
+
+        # Fleet policy overrides (optional central management): thresholds
+        # only; detection content itself always comes from signed feeds.
+        from defentra.policy import load_policy
+
+        policy = load_policy() or {}
+        self.malicious_probability = float(
+            policy.get("malicious_probability", MALICIOUS_PROBABILITY)
+        )
+        self.suspicious_probability = float(
+            policy.get("suspicious_probability", SUSPICIOUS_PROBABILITY)
+        )
         self.classifier = None
         if enable_ml:
             from defentra.ml.classifier import MalwareClassifier
@@ -365,14 +377,13 @@ class ScanEngine:
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 
-    @staticmethod
-    def _verdict(detections: List[Detection], ml_prob: Optional[float]) -> str:
+    def _verdict(self, detections: List[Detection], ml_prob: Optional[float]) -> str:
         if any(d.severity >= MALICIOUS_SEVERITY for d in detections):
             return "malicious"
-        if ml_prob is not None and ml_prob >= MALICIOUS_PROBABILITY:
+        if ml_prob is not None and ml_prob >= self.malicious_probability:
             return "malicious"
         if any(d.severity >= SUSPICIOUS_SEVERITY for d in detections):
             return "suspicious"
-        if ml_prob is not None and ml_prob >= SUSPICIOUS_PROBABILITY:
+        if ml_prob is not None and ml_prob >= self.suspicious_probability:
             return "suspicious"
         return "clean"

@@ -34,7 +34,15 @@ CREATE TABLE IF NOT EXISTS agents (
     last_seen_utc REAL,
     last_ip TEXT,
     platform TEXT,
-    das_version TEXT
+    das_version TEXT,
+    revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS pairing (
+    token_hash TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_utc REAL NOT NULL,
+    expires_utc REAL NOT NULL,
+    used_utc REAL
 );
 CREATE TABLE IF NOT EXISTS commands (
     command_id TEXT PRIMARY KEY,
@@ -97,21 +105,60 @@ class FleetStore:
             self.audit("server", "enroll", f"{name} -> {agent_id}")
             return agent_id, api_token
 
-    def consume_pairing(self, pairing_token: str, pairing_store: Dict[str, str]) -> Optional[str]:
-        """Single-use token -> bound device name (enrollment happens after)."""
+    def revoke(self, name: str) -> bool:
+        """Revoke an agent's credentials; subsequent check-ins are rejected."""
         with self._lock:
-            for token, name in list(pairing_store.items()):
-                if constant_time_eq(token, pairing_token):
-                    del pairing_store[token]
-                    return name
-        return None
+            cur = self.conn.execute(
+                "UPDATE agents SET revoked = 1 WHERE name = ? AND revoked = 0", (name,)
+            )
+            self.conn.commit()
+        if cur.rowcount:
+            self.audit("admin", "revoke", name)
+        return bool(cur.rowcount)
+
+    def issue_pairing_token(self, name: str, ttl_hours: float = 24.0) -> str:
+        """Register a single-use pairing token bound to a device name.
+
+        Tokens are persisted (hashed) so they survive server restarts and
+        expire after ttl_hours. Only the raw token is shown once.
+        """
+        token = new_token()
+        now = time.time()
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO pairing (token_hash, name, created_utc, expires_utc)"
+                " VALUES (?, ?, ?, ?)",
+                (fingerprint(token), name, now, now + ttl_hours * 3600),
+            )
+            self.conn.commit()
+        self.audit("admin", "pairing-issued", name)
+        return token
+
+    def consume_pairing(self, pairing_token: str) -> Optional[str]:
+        """Single-use, expiring token -> bound device name."""
+        digest = fingerprint(pairing_token)
+        now = time.time()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT name, expires_utc, used_utc FROM pairing WHERE token_hash = ?",
+                (digest,),
+            ).fetchone()
+            if row is None or row["used_utc"] is not None or row["expires_utc"] < now:
+                return None
+            self.conn.execute(
+                "UPDATE pairing SET used_utc = ? WHERE token_hash = ?", (now, digest)
+            )
+            self.conn.commit()
+        return row["name"]
 
     def auth_agent(self, agent_id: str, api_token: str) -> Optional[sqlite3.Row]:
         with self._lock:
             row = self.conn.execute(
                 "SELECT * FROM agents WHERE agent_id = ?", (agent_id,)
             ).fetchone()
-        if row and constant_time_eq(row["api_token_hash"], fingerprint(api_token)):
+        if row is None or row["revoked"]:
+            return None
+        if constant_time_eq(row["api_token_hash"], fingerprint(api_token)):
             return row
         return None
 
@@ -259,18 +306,30 @@ class FleetStore:
 
 
 class ManagementServer:
-    """HTTP surface: /enroll, /checkin, /result. Bind to localhost by default."""
+    """HTTP(S) surface: /enroll, /checkin, /result. Bind to localhost by default.
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8477, db_path: Optional[str] = None):
+    Provide tls_cert + tls_key (PEM) to serve HTTPS; agents pin the server
+    certificate as their CA (`defentra agent pair --ca-cert ...`).
+    """
+
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8477,
+        db_path: Optional[str] = None,
+        tls_cert: Optional[str] = None,
+        tls_key: Optional[str] = None,
+    ):
         from defentra.utils import ensure_state_dir
 
         db_path = db_path or os.path.join(ensure_state_dir(), "fleet.db")
         self.store = FleetStore(db_path)
         self.host = host
         self.port = port
-        self.pairing_tokens: Dict[str, str] = {}
+        self.tls_cert = tls_cert
+        self.tls_key = tls_key
         self.admin_private_key = self._load_or_create_admin_key()
-        self.httpd: Optional[ThreadingHTTPServer] = None
+        self.httpd = None
 
     def _load_or_create_admin_key(self):
         from cryptography.hazmat.primitives import serialization
@@ -307,12 +366,20 @@ class ManagementServer:
             .decode("utf-8")
         )
 
-    def issue_pairing_token(self, name: str) -> str:
-        """Register a single-use pairing token bound to a device name."""
-        token = new_token()
-        self.pairing_tokens[token] = name
-        self.store.audit("admin", "pairing-issued", name)
-        return token
+    def issue_pairing_token(self, name: str, ttl_hours: float = 24.0) -> str:
+        return self.store.issue_pairing_token(name, ttl_hours=ttl_hours)
+
+    def _make_httpd(self) -> ThreadingHTTPServer:
+        httpd = ThreadingHTTPServer((self.host, self.port), self._handler())
+        httpd.daemon_threads = True
+        if self.tls_cert and self.tls_key:
+            import ssl
+
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.load_cert_chain(self.tls_cert, self.tls_key)
+            httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        return httpd
 
     # -- request handling -----------------------------------------------
     def _handler(self):
@@ -369,10 +436,10 @@ class ManagementServer:
 
             def _handle_enroll(self, message):
                 pairing = str(message.get("pairing_token", ""))
-                name = server.store.consume_pairing(pairing, server.pairing_tokens)
+                name = server.store.consume_pairing(pairing)
                 if not name:
                     server.store.audit("anonymous", "enroll-rejected", "bad pairing token")
-                    return self._json(403, {"error": "invalid or used pairing token"})
+                    return self._json(403, {"error": "invalid, used, or expired pairing token"})
                 pubkey = message.get("pubkey")
                 if not isinstance(pubkey, str) or "BEGIN PUBLIC KEY" not in pubkey:
                     return self._json(400, {"error": "missing agent public key"})
@@ -422,17 +489,19 @@ class ManagementServer:
         return Handler
 
     def serve_forever(self) -> None:
-        self.httpd = ThreadingHTTPServer((self.host, self.port), self._handler())
-        self.httpd.daemon_threads = True
+        self.httpd = self._make_httpd()
         self.httpd.serve_forever()
 
     def start_background(self) -> None:
         import threading as _t
 
-        self.httpd = ThreadingHTTPServer((self.host, self.port), self._handler())
-        self.httpd.daemon_threads = True
+        self.httpd = self._make_httpd()
         thread = _t.Thread(target=self.httpd.serve_forever, daemon=True, name="defentra-mgmt")
         thread.start()
+
+    @property
+    def bound_port(self) -> int:
+        return self.httpd.server_address[1] if self.httpd else self.port
 
     def shutdown(self) -> None:
         if self.httpd:
