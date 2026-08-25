@@ -263,7 +263,9 @@ commercial endpoint product. Always test against the
 ## Security posture
 
 See [SECURITY.md](SECURITY.md) for the full threat model and disclosure
-policy. Highlights:
+policy. Deploying to production — console setup, endpoint enrollment, fleet
+policy, incident response, and troubleshooting — is covered step-by-step in
+the [Operations Runbook](docs/OPERATIONS.md). Highlights:
 
 - **Signed updates everywhere**: signature feeds *and* ML model metadata are
   Ed25519-signed against keys pinned inside the package; downloads are
