@@ -18,10 +18,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 Compression=lzma2
 SolidCompression=yes
-LicenseFile=LICENSE
+LicenseFile=..\LICENSE
 
 [Files]
-Source: "dist-standalone\defentra.exe"; DestDir: "{app}"; DestName: "defentra.exe"; Flags: ignoreversion
+Source: "..\dist-standalone\defentra.exe"; DestDir: "{app}"; DestName: "defentra.exe"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop icon for the scanner console"; GroupDescription: "Additional icons:"
