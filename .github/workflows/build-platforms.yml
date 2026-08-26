@@ -78,7 +78,8 @@ jobs:
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           if [ -f "$ISCC" ]; then
             "$ISCC" //DAppVersion="$DEFENTRA_VERSION" packaging/windows-installer.iss
-            cp installer-out/*.exe release-out/
+            cp packaging/installer-out/*.exe release-out/
+            ls -la release-out/
           else
             echo "::warning::Inno Setup not found on runner; shipping portable exe only"
           fi
