@@ -1,0 +1,94 @@
+name: Platform builds
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  frozen:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-amd64
+          - os: macos-latest
+            platform: macos-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Exclude workspace from Windows Defender
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Add-MpPreference -ExclusionPath (Join-Path $env:GITHUB_WORKSPACE '') -ErrorAction SilentlyContinue
+
+      - name: Install build deps
+        run: |
+          pip install . yara-python pyinstaller
+
+      - name: Build standalone executable
+        run: pyinstaller --noconfirm --distpath dist-standalone scripts/frozen/defentra.spec
+
+      - name: Smoke test executable
+        shell: bash
+        run: |
+          EXE="dist-standalone/defentra"
+          [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/defentra.exe"
+          "$EXE" --version
+          printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > e.bin
+          "$EXE" scan e.bin | tee out.txt
+          grep -q MALICIOUS out.txt
+
+      - name: Stage named artifact
+        shell: bash
+        run: |
+          VERSION=$(python -c "
+          import re
+          print(re.search(r'^version = \"(.+)\"', open('pyproject.toml').read(), re.M).group(1))")
+          echo "DEFENTRA_VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p release-out
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp dist-standalone/defentra.exe "release-out/defentra-$VERSION-windows-amd64.exe"
+          else
+            cp dist-standalone/defentra "release-out/defentra-$VERSION-macos-arm64"
+          fi
+
+      - name: Build Windows installer (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ -f "$ISCC" ]; then
+            "$ISCC" //DAppVersion="$DEFENTRA_VERSION" packaging/windows-installer.iss
+            cp installer-out/*.exe release-out/
+          else
+            echo "::warning::Inno Setup not found on runner; shipping portable exe only"
+          fi
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: defentra-platform-${{ matrix.platform }}
+          path: release-out/*
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          for i in $(seq 1 10); do
+            gh release view "$TAG" >/dev/null 2>&1 && break
+            echo "waiting for release $TAG..."; sleep 15
+          done
+          gh release upload "$TAG" release-out/* --clobber

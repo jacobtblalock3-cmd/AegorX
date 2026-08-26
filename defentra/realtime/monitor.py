@@ -178,7 +178,8 @@ def select_backend(name: str, paths: List[str], excludes: Optional[List[str]] = 
     from defentra.realtime.fanotify_backend import FanotifyBackend
     from defentra.realtime.inotify_backend import InotifyBackend
 
-    if FanotifyBackend.available() and os.geteuid() == 0:
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    if FanotifyBackend.available() and is_root:
         return FanotifyBackend(paths, excludes=excludes)
     if InotifyBackend.available():
         return InotifyBackend(paths)

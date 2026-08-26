@@ -197,3 +197,14 @@ def test_version_bumped():
     from defentra import __version__
 
     assert __version__ >= "0.2.0"
+
+
+@pytest.mark.skipif(sys.platform == "linux", reason="exercises the non-Linux fallback path")
+def test_non_linux_backend_selection_fails_cleanly():
+    """On Windows/macOS, monitor backend selection must raise a domain error,
+    never AttributeError from os.geteuid or an import of Linux-only modules."""
+    from defentra.realtime.monitor import RealtimeUnavailableError, select_backend
+
+    for name in ("auto", "fanotify", "inotify"):
+        with pytest.raises(RealtimeUnavailableError):
+            select_backend(name, ["/tmp"])

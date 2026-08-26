@@ -190,6 +190,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _color_ok() -> bool:
+    """ANSI colors: fine on POSIX terminals and Windows Terminal; off for legacy consoles."""
+    if os.name == "nt":
+        return bool(os.environ.get("WT_SESSION") or os.environ.get("TERM"))
+    return sys.stdout.isatty()
+
+
 def cmd_scan(args) -> int:
     engine = ScanEngine(
         db_path=args.db,
@@ -206,7 +213,8 @@ def cmd_scan(args) -> int:
     if args.json:
         print(render_json(all_results, " ".join(args.paths), elapsed))
     else:
-        print(render_text(all_results, " ".join(args.paths), elapsed, color=not args.no_color))
+        color = not args.no_color and _color_ok()
+        print(render_text(all_results, " ".join(args.paths), elapsed, color=color))
         ml_state = "loaded" if caps["ml_model"] else "not found (train with scripts/train_model.py)"
         yara_state = f"{caps['yara_rules']} rule file(s)" if caps["yara_available"] else "unavailable (pip install yara-python)"
         vba_state = "on" if caps["office_macros"] else "off (pip install 'defentra[office]')"

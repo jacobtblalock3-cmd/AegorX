@@ -23,6 +23,7 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 | Layer      | Tech                | Role                                                        |
 |------------|---------------------|-------------------------------------------------------------|
 | CLI        | argparse            | `scan`, `db`, `quarantine`, `model`, `monitor`, `keys`, `feed`, `update` commands |
+| Platforms  | Python + PyInstaller | Linux (primary, kernel-enforced realtime) + Windows/macOS standalone builds with scan-only fleet mode |
 | Engine     | Python              | Orchestrates detectors, computes verdicts                    |
 | Real-time  | ctypes (Linux)      | fanotify blocking on-access + inotify watch mode             |
 | Updates    | Ed25519 + urllib    | Signed signature feeds, ML models, **and self-updates** — all verified against pinned root keys |

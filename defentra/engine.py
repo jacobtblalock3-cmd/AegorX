@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import tempfile
 import time
@@ -24,7 +25,20 @@ DEFAULT_MAX_FILE_SIZE = 512 * 1024 * 1024
 _REPO_RULES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules"
 )
-DEFAULT_RULES_DIRS = [_REPO_RULES_DIR] if os.path.isdir(_REPO_RULES_DIR) else []
+
+
+def _candidate_rules_dirs() -> List[str]:
+    """Where YARA rule files may live: source tree, or frozen-app layouts."""
+    candidates = [_REPO_RULES_DIR]
+    frozen_base = getattr(sys, "_MEIPASS", None) or (
+        os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else None
+    )
+    if frozen_base:
+        candidates.append(os.path.join(frozen_base, "rules"))
+    return [d for d in candidates if os.path.isdir(d)]
+
+
+DEFAULT_RULES_DIRS = _candidate_rules_dirs()
 
 
 @dataclass

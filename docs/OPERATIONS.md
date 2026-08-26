@@ -45,6 +45,7 @@ trust model see [SECURITY.md](../SECURITY.md).
 |---|---|
 | Console host | Python 3.9+, any Linux; port 8477 reachable from agent networks |
 | Endpoints | Linux with `fanotify` (kernel 2.6.37+; blocking permission events used in production are CI-proven on modern kernels) |
+| Windows / macOS endpoints | Standalone builds from GitHub Releases — **scan-only fleet mode**: on-demand + scheduled scans, telemetry, self-updates; no kernel-enforced realtime yet ([details](PLATFORMS.md)) |
 | Realtime monitor | root / `CAP_SYS_ADMIN` — permission events require it |
 | Optional ML detection | x86_64/aarch64 Linux; model fetched via `defentra model fetch` |
 
