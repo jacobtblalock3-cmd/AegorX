@@ -8,6 +8,9 @@ import time
 import uuid
 from typing import Dict, List, Optional
 
+# Windows lacks O_NOFOLLOW; symlink-following is a POSIX-only hazard here.
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+
 CHUNK_SIZE = 1024 * 1024
 BLOB_MAGIC = b"DFQ1"
 BLOB_NAME_RE = re.compile(r"^[0-9a-f]{16}\.quar$")
@@ -122,7 +125,7 @@ class QuarantineVault:
             blob_name = f"{item_id}.quar"
             blob_path = os.path.join(self.base_dir, blob_name)
             chunked = False
-            fd = os.open(blob_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            fd = os.open(blob_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW, 0o600)
             with os.fdopen(fd, "wb") as out:
                 if self._cipher is not None:
                     out.write(BLOB_MAGIC)
@@ -182,7 +185,7 @@ class QuarantineVault:
         if parent:
             os.makedirs(parent, exist_ok=True)
         blob_path = self._blob_path_checked(item)
-        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "wb") as out:
             with open(blob_path, "rb") as fh:
                 header = fh.read(4)
