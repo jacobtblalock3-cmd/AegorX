@@ -3,6 +3,27 @@
 All notable changes to Defentra. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [1.1.0] — 2026-08-26
+
+**Windows + macOS support.** Standalone builds ship with the release; both
+platforms are CI-tested on every push and participate in managed fleets in
+scan-only mode (kernel-enforced realtime remains Linux).
+
+### Added
+- Cross-platform CI gate: full test matrix on `windows-latest` and
+  `macos-latest` runners, including EICAR detection smoke tests.
+- Standalone executables built per release: `defentra-<ver>-windows-amd64.exe`
+  (plus an Inno Setup installer) and `defentra-<ver>-macos-arm64`, each
+  smoke-tested post-build (version banner, EICAR verdict, trust keys).
+  Bundles pinned trust keys and YARA rules; ML stack excluded by design.
+- `docs/PLATFORMS.md` — per-platform capability matrix and install guides.
+
+### Fixed
+- Windows: `os.geteuid` crash in backend selection; `O_NOFOLLOW` absence in
+  quarantine vault; `os.kill(pid, 0)` self-termination in liveness probes
+  (now OpenProcess-based); backslash path handling for trusted-key origin
+  labeling; curses-free `defentra ui` degradation.
+
 ## [1.0.0] — 2026-08-26
 
 First stable release, validated for deployment and testing on real devices:
