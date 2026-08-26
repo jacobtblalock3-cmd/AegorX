@@ -99,7 +99,7 @@ def trust_public_key(source_path: str) -> str:
     with open(source_path, "rb") as src, open(dest, "wb") as out:
         out.write(src.read())
     os.chmod(dest, 0o644)
-    return dest
+    return dest.replace(os.sep, "/")
 
 
 def public_key_fingerprint(key: Ed25519PublicKey) -> str:
