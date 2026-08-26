@@ -35,6 +35,8 @@ Subcommands: [`admin agents`](#admin-agents) — list managed devices and last-s
 
 _list managed devices and last-seen state_
 
+- `--stale-hours` `N` — only show devices not seen for more than N hours
+
 ## `defentra admin detections`
 
 _aggregated detections across the fleet_

@@ -228,3 +228,34 @@ def test_admin_cli_gen_certs_and_revoke_flow(tmp_path, tmp_home, capsys):
     shutil.copy(str(tmp_path / "fleet.db"), os.path.join(os.environ["DEFENTRA_HOME"], "fleet.db"))
     rc = cli_main(["admin", "revoke", "cli-device"])
     assert rc == 0
+
+
+# --- stale-device filter -----------------------------------------------------
+
+
+def test_stale_agents_filter_semantics(fleet):
+    import time as _t
+
+    _cfg, agent = _enrolled_agent(fleet, name="fresh-box")
+    agent.check_in_once()
+
+    store = fleet["server"].store
+    # backdate the only device far into the past
+    old_ts = _t.time() - 48 * 3600
+    with store._lock:
+        store.conn.execute("UPDATE agents SET last_seen_utc = ?", (old_ts,))
+        store.conn.commit()
+
+    agents = store.list_agents()
+    assert all((_t.time() - a["last_seen_utc"]) > 24 * 3600 for a in agents)
+
+    # never-seen devices must also count as stale
+    token = fleet["server"].issue_pairing_token("ghost-box")
+    ghost_cfg = agent_mod.pair(
+        fleet["base_url"], token, ca_cert=fleet["ca_cert"], opener=_ca_opener(fleet["ca_cert"])
+    )
+    with store._lock:
+        row = store.conn.execute(
+            "SELECT last_seen_utc FROM agents WHERE agent_id = ?", (ghost_cfg["agent_id"],)
+        ).fetchone()
+    assert row is not None and row["last_seen_utc"] is None

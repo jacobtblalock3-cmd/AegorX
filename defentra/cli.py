@@ -142,6 +142,13 @@ def build_parser() -> argparse.ArgumentParser:
     ad_policy.add_argument("agent_name", help="target device name")
     ad_policy.add_argument("--file", required=True, help="policy JSON document")
     ad_agents = admin_sub.add_parser("agents", help="list managed devices and last-seen state")
+    ad_agents.add_argument(
+        "--stale-hours",
+        type=float,
+        default=None,
+        metavar="N",
+        help="only show devices not seen for more than N hours",
+    )
     ad_send = admin_sub.add_parser("send", help="queue a command for a device")
     ad_send.add_argument("agent_name", help="target device name")
     ad_send.add_argument("command", choices=("ping", "status", "diag", "scan-path", "feed-update", "check-update", "quarantine-list", "quarantine-delete"), help="security-ops command to queue")
@@ -616,7 +623,19 @@ def cmd_admin(args) -> int:
         print(f"queued policy push {command_id}; applies on the device's next check-in")
         return EXIT_CLEAN
     if command == "agents":
-        print(json.dumps(server.store.list_agents(), indent=2))
+        agents = server.store.list_agents()
+        stale_hours = getattr(args, "stale_hours", None)
+        now = time.time()
+        if stale_hours is not None:
+            agents = [
+                a
+                for a in agents
+                if not a.get("last_seen_utc")
+                or (now - a["last_seen_utc"]) > stale_hours * 3600
+            ]
+        print(json.dumps(agents, indent=2))
+        if stale_hours is not None and not agents:
+            print(f"no devices quiet for more than {stale_hours:g}h — fleet looks healthy")
         return EXIT_CLEAN
     if command == "send":
         rows = [a for a in server.store.list_agents() if a["name"] == args.agent_name]
