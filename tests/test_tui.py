@@ -4,7 +4,14 @@ import json
 import os
 import time
 
+import pytest
+
 from defentra import tui
+
+pytestmark = pytest.mark.skipif(
+    not getattr(tui, "CURSES_AVAILABLE", True),
+    reason="curses unavailable on this platform (Windows stdlib)",
+)
 
 
 def test_truncate_and_sanitize():

@@ -14,10 +14,16 @@ import json
 import os
 import threading
 import time
-import curses
 from typing import Callable, Dict, List, Optional, Tuple
 
+try:
+    import curses
+except ImportError:  # Windows: curses is not in the stdlib
+    curses = None
+
 from defentra import __version__
+
+CURSES_AVAILABLE = curses is not None
 
 ACCENT_CYAN = 1
 ACCENT_GREEN = 2

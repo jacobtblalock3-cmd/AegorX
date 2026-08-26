@@ -67,10 +67,14 @@ jobs:
           )
           pathlib.Path("smoke-clean.txt").write_text("hello")
           PY
-          python -m defentra.cli scan smoke-eicar.com | tee smoke.out
+          # scanner exits 2 on malicious / 1 on suspicious by design; check output instead of pipeline status
+          rc=0; python -m defentra.cli scan smoke-eicar.com > smoke.out 2>&1 || rc=$?
+          cat smoke.out; [ "$rc" -eq 2 ]
           grep -q MALICIOUS smoke.out
-          python -m defentra.cli scan smoke-clean.txt | tee clean.out
-          grep -q "malicious=0" clean.out
+          rc=0; python -m defentra.cli scan smoke-clean.txt > clean.out 2>&1 || rc=$?
+          cat clean.out; [ "$rc" -eq 0 ]
+          grep -q "clean=0 suspicious=0 malicious=1" smoke.out
+          grep -q "clean=1 suspicious=0 malicious=0" clean.out
           python -m defentra.cli doctor > doctor.out 2>&1 || true
           grep -q "doctor:" doctor.out
 
@@ -107,7 +111,8 @@ jobs:
           [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/defentra.exe"
           "$EXE" --version
           printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > e.bin
-          "$EXE" scan e.bin | tee out.txt
+          rc=0; "$EXE" scan e.bin > out.txt 2>&1 || rc=$?
+          cat out.txt; [ "$rc" -eq 2 ]
           grep -q MALICIOUS out.txt
           "$EXE" doctor > doc.out 2>&1 || true
           grep -q "trust-keys       1 pinned package key" doc.out

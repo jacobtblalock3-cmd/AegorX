@@ -47,7 +47,8 @@ jobs:
           [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/defentra.exe"
           "$EXE" --version
           printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > e.bin
-          "$EXE" scan e.bin | tee out.txt
+          rc=0; "$EXE" scan e.bin > out.txt 2>&1 || rc=$?
+          cat out.txt; [ "$rc" -eq 2 ]
           grep -q MALICIOUS out.txt
 
       - name: Stage named artifact

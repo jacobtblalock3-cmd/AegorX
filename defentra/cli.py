@@ -755,6 +755,13 @@ def cmd_protect(args) -> int:
 def cmd_ui(args) -> int:
     from defentra import tui
 
+    if not getattr(tui, "CURSES_AVAILABLE", True):
+        print(
+            "error: the terminal dashboard requires curses (unavailable on Windows;"
+            " install windows-curses or use 'defentra scan'/'defentra doctor')",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
     return tui.main()
 
 
