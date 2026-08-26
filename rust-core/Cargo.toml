@@ -9,5 +9,10 @@ name = "_defentra_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.22", optional = true }
 sha2 = "0.10"
+
+[features]
+# opt-in for building the Python extension module (e.g. via maturin);
+# kept off by default so `cargo test` links without libpython.
+extension-module = ["pyo3/extension-module", "dep:pyo3"]

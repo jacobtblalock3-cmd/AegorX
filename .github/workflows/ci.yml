@@ -30,6 +30,34 @@ jobs:
       - name: Test
         run: pytest -q tests/
 
+  rust-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust toolchain (stable, minimal)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Format check
+        run: cargo fmt --check
+        working-directory: rust-core
+
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: rust-core
+
+      - name: Tests (known SHA-256 vectors)
+        run: cargo test
+        working-directory: rust-core
+
+      - name: Extension-module feature builds
+        run: cargo check --features extension-module
+        working-directory: rust-core
+
   integration-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
