@@ -73,7 +73,11 @@ def user_trust_dir() -> str:
 
 
 def trusted_key_paths() -> List[str]:
-    """All trusted public keys: bundled package roots + user-installed ones."""
+    """All trusted public keys: bundled package roots + user-installed ones.
+
+    Paths are normalized to forward slashes so origin checks ("/trusted_keys/",
+    "/keys/") work identically on POSIX and Windows.
+    """
     paths: List[str] = []
     seen = set()
     for directory in (PACKAGE_TRUST_DIR, user_trust_dir()):
@@ -81,7 +85,7 @@ def trusted_key_paths() -> List[str]:
             real = os.path.realpath(path)
             if real not in seen:
                 seen.add(real)
-                paths.append(path)
+                paths.append(path.replace(os.sep, "/"))
     return paths
 
 
