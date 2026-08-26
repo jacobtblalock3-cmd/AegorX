@@ -49,8 +49,7 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
-    const EMPTY_SHA256: &str =
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     // NIST vector: sha256 of 1,000,000 'a' bytes (forces multi-chunk reads)
     const MILLION_A_SHA256: &str =
         "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0";
@@ -71,7 +70,10 @@ mod tests {
     #[test]
     fn empty_file_hashes_to_known_vector() {
         let path = temp_file("defentra_core_empty", 0, b'a');
-        assert_eq!(stream_sha256(path.to_str().unwrap()), Ok(EMPTY_SHA256.to_string()));
+        assert_eq!(
+            stream_sha256(path.to_str().unwrap()),
+            Ok(EMPTY_SHA256.to_string())
+        );
         let _ = std::fs::remove_file(&path);
     }
 
