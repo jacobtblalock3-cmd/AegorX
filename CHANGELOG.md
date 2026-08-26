@@ -3,6 +3,35 @@
 All notable changes to Defentra. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [1.0.0] — 2026-08-26
+
+First stable release, validated for deployment and testing on real devices:
+blocking on-access enforcement is CI-proven on current Linux kernels on every
+push, all distribution channels (PyPI, deb, GitHub Releases) are live, and
+clients keep themselves current through the signed self-update channel.
+
+### Added
+- `defentra doctor` — read-only health/suitability report across privileges,
+  fanotify, detection content, trust anchors, audit chain, vault, pairing,
+  and policy; scriptable exit codes for cron/monitoring.
+- `admin agents --stale-hours N` — surface devices that stopped checking in.
+- Scan-throughput benchmark (`scripts/bench_scan.py`).
+- CLI reference generated from the live parser (`docs/CLI.md`) with a
+  CI-enforced drift guard.
+- CONTRIBUTING.md with the full local gate matrix.
+
+### Fixed
+- Audit-log hash-chain verification now spans rotated segments with
+  retained-anchor semantics (previously every post-rotation log failed
+  verification); writers resume sequence continuity after restarts.
+
+### Changed
+- Rust acceleration core: pyo3 bindings feature-gated so `cargo test` runs
+  without libpython; NIST SHA-256 vector tests; fmt/clippy/test gate added
+  to CI.
+- Fuzz coverage extended to the PDF analyzer (incl. inflate-bomb budget) and
+  archive extraction hostile inputs.
+
 ## [0.9.0] — 2026-08-25
 
 ### Added

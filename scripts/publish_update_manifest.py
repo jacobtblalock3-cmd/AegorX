@@ -4,7 +4,7 @@
 Run in CI (Release workflow) after artifacts are staged:
 
     python scripts/publish_update_manifest.py \
-        --version 0.9.0 --key signing_private.pem \
+        --version 1.0.0 --key signing_private.pem \
         --out release-assets/update-manifest.json \
         --artifacts dist/*.whl dist/*.tar.gz release-assets/*.deb
 

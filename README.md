@@ -272,8 +272,10 @@ privately to security@defentra.example (do not open public issues).
 
 ## Disclaimer
 
-Defentra is in early alpha. It is **not yet a replacement** for a mature
-commercial endpoint product. Always test against the
+Defentra 1.0 is a first stable release: suitable for evaluation fleets and
+real-device testing, with blocking on-access enforcement CI-validated on
+current Linux kernels. It is still **not a drop-in replacement** for a mature
+commercial endpoint product — always test against the
 [EICAR](https://www.eicar.org) standard before trusting any AV deployment.
 
 ## Security posture
