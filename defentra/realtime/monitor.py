@@ -172,19 +172,66 @@ def select_backend(name: str, paths: List[str], excludes: Optional[List[str]] = 
         if not FanotifyBackend.available():
             raise RealtimeUnavailableError("fanotify backend requires Linux")
         return FanotifyBackend(paths, excludes=excludes)
+    if name == "fswatch":
+        from defentra.realtime.fswatch_backend import create_fswatch_backend
+
+        return create_fswatch_backend(paths, excludes=excludes)
+    if name == "es":
+        from defentra.realtime.es_backend import create_es_backend
+
+        return create_es_backend(paths, excludes=excludes)
+    if name == "minifilter":
+        from defentra.realtime.minifilter_backend import create_minifilter_backend
+
+        return create_minifilter_backend(paths, excludes=excludes)
     if name != "auto":
         raise RealtimeUnavailableError(f"unknown backend: {name}")
 
-    from defentra.realtime.fanotify_backend import FanotifyBackend
-    from defentra.realtime.inotify_backend import InotifyBackend
+    # Auto-detection: pick the best available backend for the current platform.
+    import platform as _platform
 
-    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
-    if FanotifyBackend.available() and is_root:
-        return FanotifyBackend(paths, excludes=excludes)
-    if InotifyBackend.available():
-        return InotifyBackend(paths)
+    system = _platform.system()
+
+    if system == "Linux":
+        from defentra.realtime.fanotify_backend import FanotifyBackend
+        from defentra.realtime.inotify_backend import InotifyBackend
+
+        is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+        if FanotifyBackend.available() and is_root:
+            return FanotifyBackend(paths, excludes=excludes)
+        if InotifyBackend.available():
+            return InotifyBackend(paths)
+
+    if system == "Darwin":
+        # Try EndpointSecurity first (requires entitlement), fall back to FSEvents.
+        from defentra.realtime.es_backend import EndpointSecurityBackend
+
+        if EndpointSecurityBackend.available():
+            try:
+                return EndpointSecurityBackend(paths, excludes=excludes)
+            except RealtimeUnavailableError:
+                pass
+        from defentra.realtime.fswatch_backend import FSwatchMacOSBackend
+
+        if FSwatchMacOSBackend.available():
+            return FSwatchMacOSBackend(paths, excludes=excludes)
+
+    if system == "Windows":
+        # Try minifilter first (requires driver), fall back to ReadDirectoryChangesW.
+        from defentra.realtime.minifilter_backend import MinifilterBackend
+
+        if MinifilterBackend.available():
+            try:
+                return MinifilterBackend(paths, excludes=excludes)
+            except RealtimeUnavailableError:
+                pass
+        from defentra.realtime.fswatch_backend import FSwatchWindowsBackend
+
+        if FSwatchWindowsBackend.available():
+            return FSwatchWindowsBackend(paths, excludes=excludes)
+
     raise RealtimeUnavailableError(
-        "no realtime backend available on this platform (requires Linux)"
+        f"no realtime backend available on {system}"
     )
 
 

@@ -18,7 +18,7 @@ import os
 from typing import Dict, List, Optional
 
 POLICY_FILE = "policy.json"
-BACKENDS = ("auto", "fanotify", "inotify")
+BACKENDS = ("auto", "fanotify", "inotify", "fswatch", "es", "minifilter")
 MAX_EXCLUSIONS = 200
 
 

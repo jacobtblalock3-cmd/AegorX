@@ -7,7 +7,8 @@
 | Encrypted quarantine vault | ✅ | ✅ | ✅ |
 | Signed feeds / models / self-updates | ✅ | ✅ | ✅ |
 | Fleet agent (check-ins, remote scans, telemetry) | ✅ | ✅ | ✅ |
-| **Blocking on-access protection** (fanotify) | ✅ root | ❌ planned driver | ❌ planned extension |
+| **Real-time notification + quarantine** (FSEvents / RDCW) | ✅ | ✅ | ✅ |
+| **Blocking on-access protection** (fanotify / EndpointSecurity / minifilter) | ✅ root | ⚙️ requires driver | ⚙️ requires entitlement |
 | `.deb` package + systemd services | ✅ | — | — |
 | Standalone executable (`defentra.exe` / `defentra`) | CI-built* | ✅ | ✅ |
 | Windows installer (Inno Setup) | — | ✅ | — |
@@ -23,14 +24,17 @@
    `defentra-<version>-windows-amd64.exe`).
 2. Verify: open a terminal → `defentra --version`.
 3. Scan something: `defentra scan C:\Users\you\Downloads`.
+4. Enable real-time protection: `defentra monitor C:\Users\you\Downloads` (runs
+   in the terminal; use Task Scheduler for persistent background protection).
 
 Notes:
 
 * The binaries are **not code-signed** yet, so SmartScreen may show a
   "unknown publisher" prompt — choose *More info → Run anyway*. This goes
   away once an Authenticode certificate is configured for the project.
-* Realtime blocking requires a filesystem minifilter driver (planned); until
-  then, use fleet policy **scheduled deep scans** or manual/on-demand scans.
+* Real-time protection uses `ReadDirectoryChangesW` for file-change
+  detection and automatic quarantine.  Blocking on-access protection
+  (denying file opens) requires a filesystem minifilter driver (planned).
 * To join a managed fleet: `defentra agent pair --server https://console:8477
   --ca-cert server.crt --token <TOKEN>` then run `defentra agent run`
   (a Windows service wrapper is on the roadmap; Task Scheduler works today).
@@ -46,14 +50,23 @@ Notes:
 2. Gatekeeper may warn because the binary is unsigned/notarized yet — right-click → Open, or
    `xattr -d com.apple.quarantine ./defentra-*` after verifying SHA256SUMS.
 3. Alternatively: `python3 -m pip install defentra` (Python 3.9+).
+4. Enable real-time protection: `defentra monitor ~/Downloads /Applications` (runs
+   in the terminal; use launchd for persistent background protection).
 
 ## What "scan-only" means off-Linux
 
-Everything except kernel-enforced realtime protection works identically:
+Everything except kernel-enforced blocking protection works identically:
 the engine, detection content updates (Ed25519-signed), quarantine,
-fleet enrollment/commands/policy, telemetry, and self-updates. Devices on
-Windows/macOS participate fully in a Defentra fleet via scheduled deep scans;
-Linux endpoints provide the always-on blocking layer.
+fleet enrollment/commands/policy, telemetry, and self-updates.
+
+**Real-time protection** is now available on all platforms:
+- **Linux**: fanotify (blocking, requires root) or inotify (notification)
+- **macOS**: FSEvents (notification, any user) — EndpointSecurity (blocking) requires Apple Developer ID + entitlement
+- **Windows**: ReadDirectoryChangesW (notification, any user) — minifilter driver (blocking) requires WHQL signing
+
+The notification backends detect malicious files in real-time and
+quarantine them immediately.  The blocking backends additionally prevent
+the malicious file from being opened/executed in the first place.
 
 ## Building the standalone binaries yourself
 

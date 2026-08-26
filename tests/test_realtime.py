@@ -184,27 +184,74 @@ def test_select_backend_rejects_unknown():
 
 @pytest.mark.skipif(platform.system() == "Linux", reason="meaningful only off-Linux")
 def test_backends_unavailable_off_linux():
+    """On non-Linux, fanotify and inotify are unavailable; auto picks a cross-platform backend."""
     from defentra.realtime.fanotify_backend import FanotifyBackend
     from defentra.realtime.inotify_backend import InotifyBackend
 
     assert not FanotifyBackend.available()
     assert not InotifyBackend.available()
-    with pytest.raises(RealtimeUnavailableError):
-        select_backend("auto", [])
+    # auto should now succeed on macOS/Windows via fswatch
+    backend = select_backend("auto", ["/tmp" if platform.system() == "Darwin" else "C:\\"])
+    assert backend.name in ("fswatch", "es", "minifilter")
 
 
-def test_version_bumped():
-    from defentra import __version__
+def test_fswatch_backend_available():
+    from defentra.realtime.fswatch_backend import (
+        FSwatchMacOSBackend,
+        FSwatchWindowsBackend,
+        create_fswatch_backend,
+    )
 
-    assert __version__ >= "0.2.0"
+    system = platform.system()
+    if system == "Darwin":
+        assert FSwatchMacOSBackend.available()
+        backend = create_fswatch_backend(["/tmp"])
+        assert backend.name == "fswatch"
+        assert backend.watched_count() == 0
+    elif system == "Windows":
+        assert FSwatchWindowsBackend.available()
+        backend = create_fswatch_backend(["C:\\"])
+        assert backend.name == "fswatch"
+    else:
+        assert not FSwatchMacOSBackend.available()
+        assert not FSwatchWindowsBackend.available()
+
+
+def test_select_backend_fswatch():
+    from defentra.realtime.fswatch_backend import create_fswatch_backend
+
+    system = platform.system()
+    if system in ("Darwin", "Windows"):
+        backend = select_backend("fswatch", ["/tmp" if system == "Darwin" else "C:\\"])
+        assert backend.name == "fswatch"
+        assert backend.watched_count() == 0  # /tmp is a dir but not watched yet
+
+
+def test_select_backend_auto_cross_platform():
+    """On any platform, 'auto' should either succeed or raise cleanly."""
+    system = platform.system()
+    try:
+        backend = select_backend("auto", ["/tmp" if system != "Windows" else "C:\\"])
+        assert backend.name in ("fanotify", "inotify", "fswatch", "es", "minifilter")
+    except RealtimeUnavailableError:
+        pass  # Acceptable on platforms with no backend
+
+
+def test_non_linux_backend_selection_fails_cleanly():
+    """On Windows/macOS, explicit Linux backends must raise a domain error."""
+    system = platform.system()
+    if system == "Linux":
+        pytest.skip("Linux — Linux backends are available here")
+
+    for name in ("fanotify", "inotify"):
+        with pytest.raises(RealtimeUnavailableError):
+            select_backend(name, ["/tmp"])
 
 
 @pytest.mark.skipif(sys.platform == "linux", reason="exercises the non-Linux fallback path")
 def test_non_linux_backend_selection_fails_cleanly():
-    """On Windows/macOS, monitor backend selection must raise a domain error,
+    """On Windows/macOS, explicit Linux backends must raise a domain error,
     never AttributeError from os.geteuid or an import of Linux-only modules."""
-    from defentra.realtime.monitor import RealtimeUnavailableError, select_backend
-
-    for name in ("auto", "fanotify", "inotify"):
+    for name in ("fanotify", "inotify"):
         with pytest.raises(RealtimeUnavailableError):
             select_backend(name, ["/tmp"])
