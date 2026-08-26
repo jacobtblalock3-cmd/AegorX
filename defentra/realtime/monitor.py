@@ -42,21 +42,38 @@ class AuditLog:
         self._load_chain_state()
 
     def _load_chain_state(self) -> None:
-        try:
-            with open(self.path, "rb") as fh:
-                for raw in fh:
-                    raw = raw.strip()
-                    if not raw:
-                        continue
-                    try:
-                        rec = json.loads(raw)
-                    except json.JSONDecodeError:
-                        continue
-                    if isinstance(rec.get("seq"), int) and rec.get("hash"):
-                        self._seq = max(self._seq, rec["seq"])
-                        self._prev_hash = rec["hash"]
-        except OSError:
-            pass
+        """Resume seq/hash continuity from the active segment or any rotated one."""
+        candidates = [self.path] + self._segment_paths()
+        best_seq = 0
+        best_hash = ""
+        for path in candidates:
+            try:
+                with open(path, "rb") as fh:
+                    for raw in fh:
+                        raw = raw.strip()
+                        if not raw:
+                            continue
+                        try:
+                            rec = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+                        if isinstance(rec.get("seq"), int) and rec.get("hash"):
+                            if rec["seq"] > best_seq:
+                                best_seq = rec["seq"]
+                                best_hash = rec["hash"]
+            except OSError:
+                continue
+        self._seq = best_seq
+        self._prev_hash = best_hash
+
+    def _segment_paths(self) -> List[str]:
+        """Rotated siblings oldest-first: path.N ... path.2, path.1."""
+        out = []
+        for i in range(self.backups, 0, -1):
+            candidate = f"{self.path}.{i}"
+            if os.path.exists(candidate):
+                out.append(candidate)
+        return out
 
     def _rotate(self) -> None:
         if os.path.exists(self.path) and os.path.getsize(self.path) < self.max_bytes:
@@ -86,31 +103,53 @@ class AuditLog:
 
 
 def verify_audit_log(path: str) -> tuple:
-    """Validate the full hash chain; returns (ok, first_broken_seq)."""
-    expected_prev = ""
+    """Validate the hash chain across the active log and all rotated segments.
+
+    Segments are verified oldest-first (path.N ... path.1, then path). The
+    first RETAINED record is treated as the trust anchor (older records may
+    have been rotated away); everything after it must link strictly
+    (seq+1, prev=last hash) and every payload hash must recompute. Returns
+    (ok, last_valid_seq) on success or (False, first_broken_seq) on failure.
+    """
+    base = os.path.abspath(path)
+    candidates: List[str] = []
+    for i in range(64, 0, -1):
+        segment = f"{base}.{i}"
+        if os.path.exists(segment):
+            candidates.append(segment)
+    candidates.append(base)
+
+    expected_prev: Optional[str] = None
     expected_seq = 0
-    try:
-        fh = open(path, "r", encoding="utf-8")
-    except OSError:
-        return False, 0
-    with fh:
-        for raw in fh:
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                rec = json.loads(raw)
-            except json.JSONDecodeError:
-                return False, expected_seq + 1
-            stored_hash = rec.pop("hash", None)
-            if rec.get("prev") != expected_prev or rec.get("seq") != expected_seq + 1:
-                return False, rec.get("seq", expected_seq + 1)
-            payload = json.dumps(rec, separators=(",", ":"), sort_keys=True)
-            actual = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-            if stored_hash != actual:
-                return False, rec.get("seq", expected_seq + 1)
-            expected_prev = stored_hash
-            expected_seq = rec["seq"]
+    anchored = False
+    for candidate in candidates:
+        try:
+            fh = open(candidate, "r", encoding="utf-8")
+        except OSError:
+            continue
+        with fh:
+            for raw in fh:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    rec = json.loads(raw)
+                except json.JSONDecodeError:
+                    return False, expected_seq + 1
+                stored_hash = rec.pop("hash", None)
+                if not anchored:
+                    # First retained record anywhere: accept position, verify integrity.
+                    expected_prev = rec.get("prev")
+                    expected_seq = rec.get("seq", 1)
+                    anchored = True
+                elif rec.get("prev") != expected_prev or rec.get("seq") != expected_seq + 1:
+                    return False, rec.get("seq", expected_seq + 1)
+                payload = json.dumps(rec, separators=(",", ":"), sort_keys=True)
+                actual = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                if stored_hash != actual:
+                    return False, rec.get("seq", expected_seq + 1)
+                expected_prev = stored_hash
+                expected_seq = rec["seq"]
     return True, expected_seq
 
 

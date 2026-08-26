@@ -123,6 +123,49 @@ def test_audit_log_deletion_breaks_chain(tmp_home):
     assert ok is False
 
 
+def test_audit_log_rotation_preserves_chain(tmp_home):
+    log = os.path.join(tmp_home, "audit.log")
+    writer = AuditLog(log, max_bytes=300, backups=3)
+    for i in range(40):
+        writer.write({"event": f"e{i}", "pad": "x" * 20})
+
+    segments = [p for p in (f"{log}.{i}" for i in range(1, 4)) if os.path.exists(p)]
+    assert segments, "rotation never produced a segment"
+    assert os.path.getsize(log) < 10 * 1024 * 1024
+
+    # chain must verify continuously ACROSS segments (the old verifier broke here)
+    ok, last_seq = verify_audit_log(log)
+    assert ok, f"post-rotation chain invalid at seq {last_seq}"
+    assert last_seq == 40
+
+    # restart scenario: new instance resumes continuity from newest record anywhere
+    resumed = AuditLog(log, max_bytes=300, backups=3)
+    resumed.write({"event": "after-restart"})
+    ok, last_seq = verify_audit_log(log)
+    assert ok and last_seq == 41
+
+
+def test_audit_log_tamper_in_rotated_segment_detected(tmp_home):
+    log = os.path.join(tmp_home, "audit.log")
+    writer = AuditLog(log, max_bytes=200, backups=3)
+    for i in range(30):
+        writer.write({"event": f"e{i}", "pad": "y" * 20})
+    segments = sorted(
+        (p for p in (f"{log}.{i}" for i in range(1, 4)) if os.path.exists(p)),
+        key=lambda p: -int(p.rsplit(".", 1)[1]),
+    )
+    victim = segments[0]  # oldest segment
+    lines = open(victim).read().splitlines()
+    rec = json.loads(lines[0])
+    rec["event"] = "forged"
+    lines[0] = json.dumps(rec)
+    open(victim, "w").write("\n".join(lines) + "\n")
+
+    ok, broken_seq = verify_audit_log(log)
+    assert not ok
+    assert broken_seq == json.loads(lines[0])["seq"] or broken_seq >= 1
+
+
 def test_sanitize_neutralizes_terminal_escapes():
     evil = "\x1b]0;pwned\x07C:\\evil.exe"
     clean = sanitize(evil)

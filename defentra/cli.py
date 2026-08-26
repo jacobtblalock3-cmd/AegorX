@@ -161,6 +161,8 @@ def build_parser() -> argparse.ArgumentParser:
     protect_sub.add_parser("seal", help="pin current hashes of trusted keys and agent config")
     protect_sub.add_parser("check", help="verify trust anchors against the sealed manifest")
 
+    sub.add_parser("doctor", help="one-shot health/suitability report (read-only)")
+
     p_update = sub.add_parser("update", help="self-update: check for and apply signed releases")
     update_sub = p_update.add_subparsers(dest="update_command")
     u_check = update_sub.add_parser("check", help="fetch + verify the signed release manifest; report newer versions")
@@ -637,6 +639,14 @@ def cmd_admin(args) -> int:
     return EXIT_ERROR
 
 
+def cmd_doctor(args) -> int:
+    from defentra.doctor import STATUS_FAIL, render_text, run_doctor
+
+    reports = run_doctor()
+    print(render_text(reports))
+    return EXIT_ERROR if any(r["status"] == STATUS_FAIL for r in reports) else EXIT_CLEAN
+
+
 def cmd_update(args) -> int:
     from defentra.update import UpdateError, auto_apply, check
 
@@ -740,6 +750,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "admin": cmd_admin,
         "watchdog": cmd_watchdog,
         "protect": cmd_protect,
+        "doctor": cmd_doctor,
         "update": cmd_update,
         "ui": cmd_ui,
     }
