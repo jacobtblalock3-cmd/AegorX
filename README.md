@@ -22,10 +22,10 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
 
 | Layer      | Tech                | Role                                                        |
 |------------|---------------------|-------------------------------------------------------------|
-| CLI        | argparse            | `scan`, `db`, `quarantine`, `model`, `monitor`, `keys`, `feed` commands |
+| CLI        | argparse            | `scan`, `db`, `quarantine`, `model`, `monitor`, `keys`, `feed`, `update` commands |
 | Engine     | Python              | Orchestrates detectors, computes verdicts                    |
 | Real-time  | ctypes (Linux)      | fanotify blocking on-access + inotify watch mode             |
-| Updates    | Ed25519 + urllib    | Signed signature feeds, verified against pinned root keys    |
+| Updates    | Ed25519 + urllib    | Signed signature feeds, ML models, **and self-updates** — all verified against pinned root keys |
 | Signatures | SQLite              | MD5/SHA-1/SHA-256 known-threat lookups (JSON import/export)  |
 | YARA       | yara-python         | Pattern/rule-based detection (`rules/*.yar`)                 |
 | ML         | LightGBM            | Static-feature malware classifier (PE + ELF)                 |
@@ -141,6 +141,22 @@ defentra feed update                     # fetch official feed, verify, apply
 defentra feed verify my-feed.json        # check any signed feed locally
 defentra keys list                       # show trusted keys + fingerprints
 ```
+
+### Self-updating releases
+
+The product itself updates through the same trust model. Every release ships a
+signed `update-manifest.json` (Ed25519 from the project root key); clients
+verify the manifest, download the artifact, enforce the signed sha256 + size,
+and refuse downgrades:
+
+```bash
+defentra update check                    # is a newer signed release available?
+sudo defentra update apply               # verify → download → apt/pip install
+```
+
+Fleet operators: `defentra admin send DEVICE check-update` reports per-device
+update status through the console (see the
+[Operations Runbook](docs/OPERATIONS.md)).
 
 Publishing your own feed:
 
@@ -285,4 +301,4 @@ the [Operations Runbook](docs/OPERATIONS.md). Highlights:
 
 ## License
 
-GPL-3.0-or-later — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).

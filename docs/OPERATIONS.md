@@ -315,6 +315,30 @@ periodically and after any suspected compromise.
 
 ## 9. Upgrades
 
+### 9.1 Self-update channel (preferred)
+
+Every release publishes an Ed25519-signed `update-manifest.json` alongside the
+artifacts. Endpoints verify the manifest against the pinned root keys, enforce
+the signed sha256 + size on download, and refuse downgrades/rollbacks:
+
+```bash
+sudo defentra update check               # report newer signed release
+sudo defentra update apply               # verify → download → apt-get/pip install
+sudo defentra update apply --kind wheel  # force a channel (deb|wheel)
+```
+
+Notes:
+
+* `.deb` artifacts auto-install only when running as root with apt-get
+  present; otherwise install the downloaded wheel via pip.
+* Manifests expire (14-day TTL). A host offline past expiry needs
+  `--allow-expired` to apply, which is safe: signature and checksums still
+  gate everything.
+* Fleet visibility: `defentra admin send DEVICE check-update` returns the
+  device's current vs. available version through the normal result pipeline.
+
+### 9.2 Manual upgrades
+
 1. Verify the release: check `SHA256SUMS` against downloaded artifacts.
 2. Upgrade the package (deb: `apt install ./defentra_<new>_all.deb`, pip:
    `pip install -U defentra`).

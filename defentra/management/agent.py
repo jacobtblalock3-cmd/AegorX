@@ -314,6 +314,21 @@ class DASAgent:
         rc = cli_main(["feed", "update"])
         return {"exit_code": rc}
 
+    def cmd_check_update(self, args: Dict) -> Dict:
+        from defentra.update import UpdateError, check
+
+        try:
+            result = check()
+        except UpdateError as exc:
+            return {"status": "error", "detail": str(exc)[:300]}
+        return {
+            "status": "done",
+            "current": result["current"],
+            "available": result["available"],
+            "update_available": result["update_available"],
+            "generated_utc": result["generated_utc"],
+        }
+
     def cmd_quarantine_list(self, args: Dict) -> Dict:
         from defentra.quarantine.vault import QuarantineVault
 
@@ -385,6 +400,7 @@ COMMAND_HANDLERS: Dict[str, Callable[[DASAgent, Dict], Dict]] = {
     "diag": DASAgent.cmd_diag,
     "scan-path": DASAgent.cmd_scan_path,
     "feed-update": DASAgent.cmd_feed_update,
+    "check-update": DASAgent.cmd_check_update,
     "quarantine-list": DASAgent.cmd_quarantine_list,
     "quarantine-delete": DASAgent.cmd_quarantine_delete,
     "apply-policy": DASAgent.cmd_apply_policy,

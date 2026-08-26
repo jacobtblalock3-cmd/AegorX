@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     ad_agents = admin_sub.add_parser("agents", help="list managed devices and last-seen state")
     ad_send = admin_sub.add_parser("send", help="queue a command for a device")
     ad_send.add_argument("agent_name")
-    ad_send.add_argument("command", choices=("ping", "status", "diag", "scan-path", "feed-update", "quarantine-list", "quarantine-delete"))
+    ad_send.add_argument("command", choices=("ping", "status", "diag", "scan-path", "feed-update", "check-update", "quarantine-list", "quarantine-delete"))
     ad_send.add_argument("--arg", action="append", default=None, dest="args", help="key=value argument (repeatable)")
     ad_results = admin_sub.add_parser("results", help="recent command results")
     ad_results.add_argument("--agent", default=None)
@@ -160,6 +160,21 @@ def build_parser() -> argparse.ArgumentParser:
     protect_sub = p_protect.add_subparsers(dest="protect_command")
     protect_sub.add_parser("seal", help="pin current hashes of trusted keys and agent config")
     protect_sub.add_parser("check", help="verify trust anchors against the sealed manifest")
+
+    p_update = sub.add_parser("update", help="self-update: check for and apply signed releases")
+    update_sub = p_update.add_subparsers(dest="update_command")
+    u_check = update_sub.add_parser("check", help="fetch + verify the signed release manifest; report newer versions")
+    u_check.add_argument("--url", default=None, help="manifest URL (default: official latest release)")
+    u_apply = update_sub.add_parser("apply", help="verify + download + install the newest release artifact")
+    u_apply.add_argument("--url", default=None, help="manifest URL (default: official latest release)")
+    u_apply.add_argument(
+        "--kind",
+        choices=("auto", "deb", "wheel"),
+        default="auto",
+        help="artifact to install (auto: deb when root+apt-get, else wheel)",
+    )
+    u_apply.add_argument("--force", action="store_true", help="apply even when not newer than the running version")
+    u_apply.add_argument("--allow-expired", action="store_true", help="accept manifests past their expiry")
 
     sub.add_parser("ui", help="terminal dashboard (minimal, floating-button console)")
 
@@ -622,6 +637,33 @@ def cmd_admin(args) -> int:
     return EXIT_ERROR
 
 
+def cmd_update(args) -> int:
+    from defentra.update import UpdateError, auto_apply, check
+
+    if not getattr(args, "update_command", None):
+        print("specify a subcommand: defentra update check|apply", file=sys.stderr)
+        return EXIT_ERROR
+    try:
+        if args.update_command == "check":
+            result = check(url=args.url)
+            doc = {k: result[k] for k in ("current", "available", "update_available")}
+            print(json.dumps(doc, indent=2))
+            return EXIT_CLEAN
+        outcome = auto_apply(
+            kind=args.kind,
+            url=args.url,
+            force=args.force,
+            allow_expired=getattr(args, "allow_expired", False),
+        )
+    except UpdateError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    print(json.dumps({k: v for k, v in outcome.items() if k != "_doc"}, indent=2))
+    if not outcome.get("updated", True):
+        return EXIT_CLEAN
+    return EXIT_CLEAN if outcome.get("returncode", 0) == 0 else EXIT_ERROR
+
+
 def cmd_watchdog(args) -> int:
     from defentra.shield import liveness, restart_service
 
@@ -698,6 +740,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "admin": cmd_admin,
         "watchdog": cmd_watchdog,
         "protect": cmd_protect,
+        "update": cmd_update,
         "ui": cmd_ui,
     }
     handler = handlers.get(args.command)

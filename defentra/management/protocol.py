@@ -25,6 +25,7 @@ ALLOWED_COMMANDS = (
     "diag",
     "scan-path",
     "feed-update",
+    "check-update",
     "quarantine-list",
     "quarantine-delete",
     "apply-policy",

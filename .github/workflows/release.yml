@@ -56,6 +56,29 @@ jobs:
           cp SHA256SUMS release-assets/SHA256SUMS
           cat release-assets/SHA256SUMS
 
+      - name: Sign self-update manifest
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_PRIVATE_KEY }}
+        run: |
+          pip install --quiet cryptography
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::SIGNING_PRIVATE_KEY secret is not set - clients could not verify self-updates"
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY" > signing_private.pem
+          python scripts/publish_update_manifest.py \
+            --version "${GITHUB_REF_NAME#v}" \
+            --key signing_private.pem \
+            --out release-assets/update-manifest.json \
+            --artifacts dist/*.whl dist/*.tar.gz release-assets/*.deb
+          rm -f signing_private.pem
+          python - <<'PY'
+          import json
+          doc = json.load(open("release-assets/update-manifest.json"))
+          assert doc["format"] == "defentra-update-manifest" and doc["signature"]
+          print("manifest ok:", doc["version"], sorted(doc["artifacts"]))
+          PY
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
