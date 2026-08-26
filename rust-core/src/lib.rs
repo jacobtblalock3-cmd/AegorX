@@ -9,6 +9,9 @@ use std::fs::File;
 use std::io::Read;
 
 /// Stream a file through SHA-256 without loading it fully into memory.
+// Dead from the linker's view when built as a bare lib (no feature, no
+// tests); reachable via the pyo3 wrapper or the test module.
+#[cfg_attr(not(any(test, feature = "extension-module")), allow(dead_code))]
 fn stream_sha256_inner(path: &str) -> Result<String, String> {
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
