@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach builds to"
+        required: true
+        default: "v1.1.0"
 
 permissions:
   contents: write
@@ -87,7 +93,7 @@ jobs:
       - name: Attach to GitHub Release
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ inputs.tag || github.ref_name }}"
           for i in $(seq 1 10); do
             gh release view "$TAG" >/dev/null 2>&1 && break
             echo "waiting for release $TAG..."; sleep 15
