@@ -24,6 +24,7 @@ def _sample(tmp_path, name="mal.exe", content=b"MZ" + b"A" * 256):
     return str(p)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 def test_state_dir_is_owner_only(tmp_home):
     from defentra.utils import ensure_state_dir
 
@@ -36,6 +37,7 @@ def test_vault_key_lives_outside_blob_dir(vault):
     assert not os.path.exists(os.path.join(vault.base_dir, "vault.key"))
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 def test_vault_blobs_are_0600(vault, tmp_path):
     entry = vault.quarantine(_sample(tmp_path), reason="test")
     blob = os.path.join(vault.base_dir, entry["blob"])

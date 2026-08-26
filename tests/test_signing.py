@@ -56,6 +56,7 @@ def second_keypair(tmp_path):
     return generate_keypair(d)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 def test_generate_keypair_files_and_permissions(keypair):
     private_path, public_path = keypair
     assert os.path.exists(private_path) and os.path.exists(public_path)

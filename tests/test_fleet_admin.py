@@ -77,6 +77,7 @@ def test_wrong_ca_fails_handshake(fleet, tmp_path):
         agent_mod.pair(fleet["base_url"], "t", ca_cert=other_cert, opener=_ca_opener(other_cert))
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 def test_gen_certs_outputs_key_with_private_perms(tmp_path):
     cert, key = generate_server_cert(str(tmp_path / "c"), hostname="x.test")
     assert os.path.exists(cert)
