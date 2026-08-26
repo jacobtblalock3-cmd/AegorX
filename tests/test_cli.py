@@ -68,3 +68,28 @@ def test_model_info_without_training(tmp_home):
     assert proc.returncode == 0
     info = json.loads(proc.stdout)
     assert info["available"] in (True, False)
+
+
+def test_cli_reference_docs_in_sync(tmp_path):
+    """docs/CLI.md must match the live argparse tree (run scripts/gen_cli_docs.py)."""
+    import subprocess
+    import sys
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    doc = os.path.join(repo, "docs", "CLI.md")
+    assert os.path.exists(doc), "docs/CLI.md missing - run scripts/gen_cli_docs.py"
+    out = os.path.join(str(tmp_path), "CLI.md")
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    subprocess.run(
+        [sys.executable, os.path.join(repo, "scripts", "gen_cli_docs.py"), "--out", out],
+        check=True,
+        cwd=repo,
+        env=env,
+        capture_output=True,
+    )
+    committed = open(doc, encoding="utf-8").read()
+    generated = open(out, encoding="utf-8").read()
+    assert generated.strip(), "generated doc is empty"
+    assert committed == generated, (
+        "docs/CLI.md drifted from the CLI parser - run: python scripts/gen_cli_docs.py"
+    )
