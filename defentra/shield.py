@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import signal
+import sys
 import threading
 import time
 from typing import Callable, Dict, List, Optional
@@ -90,9 +91,26 @@ def liveness(max_age_seconds: float = 90.0) -> Dict:
 
 
 def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        # os.kill(pid, 0) TERMINATES the process on Windows — probe with
+        # OpenProcess(SYNCHRONIZE) instead.
+        import ctypes
+
+        SYNCHRONIZE = 0x00100000
+        handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
     try:
         os.kill(pid, 0)
         return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # exists but not ours
     except (OSError, ValueError):
         return False
 
