@@ -32,7 +32,7 @@ Security = "https://github.com/jacobtblalock3-cmd/defentra/blob/main/SECURITY.md
 yara = ["yara-python>=4.3"]
 ml = ["lightgbm>=4.0", "numpy>=1.23"]
 office = ["oletools>=0.40"]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "pytest-timeout>=2.1"]
 
 [project.scripts]
 defentra = "defentra.cli:main"
