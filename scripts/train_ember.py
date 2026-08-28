@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train the Defentra classifier from the EMBER 2018 dataset.
 
-Streams EMBER's raw JSONL records through defentra.ml.ember_map, projecting
+Streams EMBER's raw JSONL records through aegorx.ml.ember_map, projecting
 them into the exact runtime feature schema the scanner uses — a million-scale
 supervised signal with zero drift between training and inference.
 
@@ -25,8 +25,8 @@ from typing import Callable, List, Optional, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from defentra.ml.ember_map import ember_record_to_features, parse_label
-from defentra.ml.features import FEATURE_NAMES, FEATURE_VERSION, vectorize
+from aegorx.ml.ember_map import ember_record_to_features, parse_label
+from aegorx.ml.features import FEATURE_NAMES, FEATURE_VERSION, vectorize
 
 MALICIOUS_THRESHOLD = 0.85
 SUSPICIOUS_THRESHOLD = 0.60
@@ -258,7 +258,7 @@ def run_training(
     digest = hashlib.sha256(open(model_path, "rb").read()).hexdigest()
 
     meta = {
-        "format": "defentra-model-meta",
+        "format": "aegorx-model-meta",
         "source": "EMBER 2018",
         "model_sha256": digest,
         "feature_version": FEATURE_VERSION,
@@ -279,7 +279,7 @@ def run_training(
     }
 
     if sign_key:
-        from defentra.signing.keys import load_private_key
+        from aegorx.signing.keys import load_private_key
 
         payload = json.dumps(meta, sort_keys=True, separators=(",", ":")).encode("utf-8")
         meta["signature"] = base64.b64encode(load_private_key(sign_key).sign(payload)).decode("ascii")
@@ -319,7 +319,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--data-dir", default=None, help="directory containing EMBER *.jsonl")
     parser.add_argument("--train", default=None, help="explicit training JSONL path(s), comma-separated")
     parser.add_argument("--test", default=None, help="explicit held-out JSONL path(s), comma-separated")
-    parser.add_argument("--out-dir", default=None, help="artifact directory (default ~/.defentra/models)")
+    parser.add_argument("--out-dir", default=None, help="artifact directory (default ~/.aegorx/models)")
     parser.add_argument("--rounds", type=int, default=400)
     parser.add_argument("--max-per-class", type=int, default=None, help="cap per class (0 disables the cap)")
     parser.add_argument("--sign-key", default=None, help="Ed25519 private key PEM to sign the metadata sidecar")
@@ -336,7 +336,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         parser.error("provide --data-dir or explicit --train/--test")
 
-    out_dir = args.out_dir or os.path.join(os.path.expanduser("~"), ".defentra", "models")
+    out_dir = args.out_dir or os.path.join(os.path.expanduser("~"), ".aegorx", "models")
     cap = args.max_per_class if args.max_per_class else None
     try:
         meta = run_training(

@@ -1,6 +1,6 @@
-# Defentra Rust Core
+# AegorX Rust Core
 
-Performance-critical primitives exposed to the Python engine as `_defentra_core`.
+Performance-critical primitives exposed to the Python engine as `_aegorx_core`.
 
 ## Build
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 
-from defentra.scanner.hashes import file_hashes
+from aegorx.scanner.hashes import file_hashes
 
 EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 

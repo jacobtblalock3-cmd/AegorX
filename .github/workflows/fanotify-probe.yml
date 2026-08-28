@@ -31,12 +31,12 @@ jobs:
 
       - name: Fanotify strict-mode probe (as root)
         env:
-          DEFENTRA_HOME: /tmp/defentra-probe
-          DEFENTRA_FANOTIFY_STRICT: "1"
-          DEFENTRA_FANOTIFY_DEBUG: "1"
+          AEGORX_HOME: /tmp/aegorx-probe
+          AEGORX_FANOTIFY_STRICT: "1"
+          AEGORX_FANOTIFY_DEBUG: "1"
         run: |
           set +e
-          sudo --preserve-env=DEFENTRA_HOME,DEFENTRA_FANOTIFY_STRICT,DEFENTRA_FANOTIFY_DEBUG "$(which python)" \
+          sudo --preserve-env=AEGORX_HOME,AEGORX_FANOTIFY_STRICT,AEGORX_FANOTIFY_DEBUG "$(which python)" \
             -m pytest tests/test_linux_integration.py::test_fanotify_denies_malicious_open \
             -v -s --capture=no > /tmp/probe.log 2>&1
           RC=$?

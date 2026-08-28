@@ -26,11 +26,11 @@ EICAR_SHA256 = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f
 @pytest.fixture(scope="module")
 def conformance_engine(tmp_path_factory):
     home = tmp_path_factory.mktemp("eicar-home")
-    os.environ["DEFENTRA_HOME"] = str(home)
+    os.environ["AEGORX_HOME"] = str(home)
     rules = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules"
     )
-    from defentra.engine import ScanEngine
+    from aegorx.engine import ScanEngine
 
     return ScanEngine(rules_dirs=[rules], enable_ml=False)
 
@@ -82,11 +82,11 @@ def test_tail_mutated_variant_caught_by_content_rule(conformance_engine, tmp_pat
 
 def test_feed_delivered_variant_is_enforced_after_update(tmp_home, tmp_path, monkeypatch):
     """A variant hash arriving through the *signed feed* must block the file."""
-    from defentra.cli import main as cli_main
-    from defentra.engine import ScanEngine
-    from defentra.signatures.db import SignatureDB
-    from defentra.signing.feed import new_feed, sign_document
-    from defentra.signing.keys import generate_keypair, trust_public_key
+    from aegorx.cli import main as cli_main
+    from aegorx.engine import ScanEngine
+    from aegorx.signatures.db import SignatureDB
+    from aegorx.signing.feed import new_feed, sign_document
+    from aegorx.signing.keys import generate_keypair, trust_public_key
 
     variant = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+X*"
     digest = hashlib.sha256(variant.encode()).hexdigest()
@@ -114,7 +114,7 @@ def test_feed_delivered_variant_is_enforced_after_update(tmp_home, tmp_path, mon
 
 
 def test_quarantine_restore_redetect_cycle(conformance_engine, tmp_path):
-    from defentra.quarantine.vault import QuarantineVault
+    from aegorx.quarantine.vault import QuarantineVault
 
     vault = QuarantineVault()
     path = tmp_path / "cycle.com"

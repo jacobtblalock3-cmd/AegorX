@@ -5,7 +5,7 @@ Builds a LightGBM model from two directories of labeled binaries:
 
     python scripts/train_model.py --benign /usr/bin --malicious ./malware-samples
 
-The trained model is written to ~/.defentra/models/malware.lgbm and is picked up
+The trained model is written to ~/.aegorx/models/malware.lgbm and is picked up
 automatically by the engine on the next scan.
 
 For a larger corpus, the EMBER 2018 dataset (https://ember.readthedocs.io)
@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from defentra.ml.features import FEATURE_NAMES, extract_features, vectorize
+from aegorx.ml.features import FEATURE_NAMES, extract_features, vectorize
 
 
 def collect(root: str, label: int):
@@ -43,7 +43,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--benign", required=True, help="directory of known-good binaries")
     parser.add_argument("--malicious", required=True, help="directory of known-bad samples")
-    parser.add_argument("--out", default=None, help="output .lgbm path (default ~/.defentra/models)")
+    parser.add_argument("--out", default=None, help="output .lgbm path (default ~/.aegorx/models)")
     parser.add_argument("--rounds", type=int, default=300)
     args = parser.parse_args()
 
@@ -51,7 +51,7 @@ def main() -> int:
         import numpy as np
         import lightgbm as lgb
     except Exception:
-        print("error: install ML deps first: pip install 'defentra[ml]'", file=sys.stderr)
+        print("error: install ML deps first: pip install 'aegorx[ml]'", file=sys.stderr)
         return 3
 
     print(f"[+] extracting features from benign corpus: {args.benign}")
@@ -84,7 +84,7 @@ def main() -> int:
     if args.out:
         out_path = args.out
     else:
-        from defentra.utils import state_dir
+        from aegorx.utils import state_dir
 
         out_dir = os.path.join(state_dir(), "models")
         os.makedirs(out_dir, exist_ok=True)

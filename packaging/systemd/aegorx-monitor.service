@@ -1,0 +1,29 @@
+[Unit]
+Description=AegorX real-time antivirus protection
+Documentation=https://github.com/jacobtblalock3-cmd/AegorX
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/opt/aegorx/bin/aegorx monitor --backend fanotify /
+Restart=on-failure
+RestartSec=5
+# fanotify permission events require CAP_SYS_ADMIN
+PermissionsStartOnly=true
+Nice=-5
+LimitNOFILE=65536
+
+# sandboxing: reduce blast radius of a compromised scanner without
+# interfering with its ability to read the filesystem it protects
+UMask=0077
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=false
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

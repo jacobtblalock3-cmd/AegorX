@@ -7,11 +7,11 @@ import sys
 
 import pytest
 
-from defentra.management.agent import DASAgent
-from defentra.management.protocol import ALLOWED_COMMANDS, make_command, verify_command
-from defentra.signing.feed import sign_document
-from defentra.signing.keys import generate_keypair, trust_public_key
-from defentra.update import (
+from aegorx.management.agent import DASAgent
+from aegorx.management.protocol import ALLOWED_COMMANDS, make_command, verify_command
+from aegorx.signing.feed import sign_document
+from aegorx.signing.keys import generate_keypair, trust_public_key
+from aegorx.update import (
     DEFAULT_MANIFEST_URL,
     UpdateError,
     apply_update,
@@ -32,8 +32,8 @@ def signing(tmp_path, tmp_home):
     return priv
 
 
-def signed_manifest(priv, version="99.0.0", url="https://releases.example/defentra-99.0.0.whl"):
-    data = b"defentra-fake-artifact-payload"
+def signed_manifest(priv, version="99.0.0", url="https://releases.example/aegorx-99.0.0.whl"):
+    data = b"aegorx-fake-artifact-payload"
     doc = build_manifest(
         version,
         [
@@ -55,9 +55,9 @@ def test_build_manifest_requires_known_kind_and_fields():
         build_manifest("1.0.0", [{"url": "https://x/file.exe", "sha256": "a" * 64, "size": 1}])
     with pytest.raises(UpdateError):
         build_manifest("1.0.0", [{"url": "https://x/f.whl", "size": 1}])
-    doc = build_manifest("1.0.0", [{"url": "https://x/defentra-1.0.0-py3-none-any.whl", "sha256": "b" * 64, "size": 5}])
+    doc = build_manifest("1.0.0", [{"url": "https://x/aegorx-1.0.0-py3-none-any.whl", "sha256": "b" * 64, "size": 5}])
     assert doc["artifacts"]["wheel"]["url"].endswith(".whl")
-    assert doc["format"] == "defentra-update-manifest"
+    assert doc["format"] == "aegorx-update-manifest"
 
 
 def test_verify_manifest_round_trip_and_tamper(tmp_path, signing):
@@ -123,7 +123,7 @@ def test_check_rejects_unsigned_and_bad_signature(tmp_path, signing):
     broken["signature"] = "AAAA"
     with pytest.raises(UpdateError):
         check(current="0.1.0", opener=_fake_opener(json.dumps(broken).encode()))
-    raw = {"format": "defentra-update-manifest", "manifest_version": 1}
+    raw = {"format": "aegorx-update-manifest", "manifest_version": 1}
     with pytest.raises(UpdateError, match="bad 'format'|no artifacts|no signature"):
         verify_manifest(raw)
 
@@ -151,7 +151,7 @@ def test_fetch_manifest_rejects_non_https_default_guard():
 def test_download_artifact_verifies_hash_size_and_suffix(tmp_path, signing):
     _, data = signed_manifest(signing)
     entry = {
-        "url": "https://releases.example/defentra-99.0.0-py3-none-any.whl",
+        "url": "https://releases.example/aegorx-99.0.0-py3-none-any.whl",
         "sha256": hashlib.sha256(data).hexdigest(),
         "size": len(data),
     }
@@ -172,7 +172,7 @@ def test_download_artifact_verifies_hash_size_and_suffix(tmp_path, signing):
 
 
 def test_download_artifact_enforces_max_bytes(tmp_path, monkeypatch):
-    from defentra import update as upd
+    from aegorx import update as upd
 
     monkeypatch.setattr(upd, "MAX_ARTIFACT_BYTES", 8)
     entry = {
@@ -195,7 +195,7 @@ def test_parse_version():
 def test_apply_update_downgrade_guard_and_installer(tmp_path):
     artifact = tmp_path / "f.whl"
     artifact.write_bytes(b"x")
-    from defentra import __version__
+    from aegorx import __version__
 
     with pytest.raises(UpdateError, match="downgrade"):
         apply_update(str(artifact), "0.0.1")
@@ -215,7 +215,7 @@ def test_apply_update_downgrade_guard_and_installer(tmp_path):
 def test_installer_selection(monkeypatch):
     import shutil
 
-    from defentra.update import _installer_for
+    from aegorx.update import _installer_for
 
     monkeypatch.setattr(os, "geteuid", lambda: 0, raising=False)
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/apt-get")
@@ -240,7 +240,7 @@ def test_fleet_check_update_command(tmp_path, signing, monkeypatch):
             "generated_utc": doc["generated_utc"],
         }
 
-    monkeypatch.setattr("defentra.update.check", fake_check)
+    monkeypatch.setattr("aegorx.update.check", fake_check)
 
     key = Ed25519PrivateKey.generate()
     pub_pem = key.public_key().public_bytes(
@@ -267,7 +267,7 @@ def test_fleet_check_update_command(tmp_path, signing, monkeypatch):
 def test_auto_apply_flow_with_fake_opener(tmp_path, signing, monkeypatch):
     import sys
 
-    from defentra import update as upd
+    from aegorx import update as upd
 
     doc, data = signed_manifest(signing, version="99.0.0")
     manifest_payload = json.dumps(doc).encode()

@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from defentra.doctor import (
+from aegorx.doctor import (
     STATUS_FAIL,
     STATUS_OK,
     STATUS_WARN,
@@ -32,7 +32,7 @@ def test_doctor_signature_db_states(tmp_home):
     assert sig()["status"] == STATUS_OK
 
     # corrupt database file -> FAIL, not crash
-    from defentra.signatures.db import SignatureDB
+    from aegorx.signatures.db import SignatureDB
 
     SignatureDB(os.path.join(tmp_home, "signatures.db")).conn.close()
     with open(os.path.join(tmp_home, "signatures.db"), "wb") as fh:
@@ -42,7 +42,7 @@ def test_doctor_signature_db_states(tmp_home):
 
 
 def test_doctor_feed_freshness_transitions(tmp_home):
-    from defentra.signing.feed import parse_utc
+    from aegorx.signing.feed import parse_utc
 
     state = os.path.join(tmp_home, "feed_state.json")
 
@@ -87,7 +87,7 @@ def test_doctor_agent_pairing_states(tmp_home):
 
 def test_doctor_audit_chain_detects_tamper(tmp_home):
     log = os.path.join(tmp_home, "realtime.log")
-    from defentra.realtime.monitor import AuditLog
+    from aegorx.realtime.monitor import AuditLog
 
     audit = AuditLog(log)
     audit.write({"event": "one"})

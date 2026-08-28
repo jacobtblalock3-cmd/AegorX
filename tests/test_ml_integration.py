@@ -14,7 +14,7 @@ import sys
 import pytest
 
 from conftest import build_minimal_pe
-from defentra.engine import ScanEngine
+from aegorx.engine import ScanEngine
 
 try:
     import lightgbm  # noqa: F401
@@ -74,32 +74,32 @@ def test_train_then_classify_end_to_end(tmp_path, monkeypatch):
     out_dir = tmp_path / "artifacts"
     meta = run_training(str(train), str(test), str(out_dir), rounds=25)
     assert meta["test_auc"] > 0.9, "synthetic classes are separable; AUC must reflect that"
-    assert meta["format"] == "defentra-model-meta"
+    assert meta["format"] == "aegorx-model-meta"
 
     # classifier loads the freshly trained artifact by explicit path
-    from defentra.ml.classifier import MalwareClassifier
+    from aegorx.ml.classifier import MalwareClassifier
 
     model_path = out_dir / "malware-ember.lgbm"
     classifier = MalwareClassifier(model_path=str(model_path))
     assert classifier.available
 
-    # engine picks the same model up through DEFENTRA_MODEL_DIR discovery
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", str(out_dir))
+    # engine picks the same model up through AEGORX_MODEL_DIR discovery
+    monkeypatch.setenv("AEGORX_MODEL_DIR", str(out_dir))
     engine_model = MalwareClassifier()
-    assert engine_model.available, "engine discovery must honor DEFENTRA_MODEL_DIR"
+    assert engine_model.available, "engine discovery must honor AEGORX_MODEL_DIR"
 
     pe = tmp_path / "sample.bin"
     pe.write_bytes(build_minimal_pe())
     proba = engine_model.predict_proba(
-        __import__("defentra.ml.features", fromlist=["vectorize"]).vectorize(
-            __import__("defentra.ml.features", fromlist=["extract_features"]).extract_features(str(pe))
+        __import__("aegorx.ml.features", fromlist=["vectorize"]).vectorize(
+            __import__("aegorx.ml.features", fromlist=["extract_features"]).extract_features(str(pe))
         )
     )
     assert proba is None or 0.0 <= proba <= 1.0
 
 
 def test_classifier_ignores_garbage_model_file(tmp_path):
-    from defentra.ml.classifier import MalwareClassifier
+    from aegorx.ml.classifier import MalwareClassifier
 
     bogus = tmp_path / "malware.lgbm"
     bogus.write_bytes(b"not-a-real-booster")

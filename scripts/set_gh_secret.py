@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set a GitHub Actions secret on the defentra repo via the REST API.
+"""Set a GitHub Actions secret on the aegorx repo via the REST API.
 
 Usage: set_gh_secret.py NAME value-file|-  (value read from file or stdin)
 
@@ -16,7 +16,7 @@ import os
 import sys
 import urllib.request
 
-REPO = "jacobtblalock3-cmd/defentra"
+REPO = "jacobtblalock3-cmd/AegorX"
 API = f"https://api.github.com/repos/{REPO}"
 
 

@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from defentra.cli import build_parser  # noqa: E402
+from aegorx.cli import build_parser  # noqa: E402
 
 
 def _help(obj) -> str:
@@ -28,7 +28,7 @@ def action_repr(a) -> str:
 
 
 def emit(parser_obj, prefix: str, lines: list, fallback_help: str = "") -> None:
-    title = f"`defentra {prefix}`" if prefix else "`defentra`"
+    title = f"`aegorx {prefix}`" if prefix else "`aegorx`"
     lines.append(f"## {title}")
     lines.append("")
     h = _help(parser_obj) or fallback_help
@@ -129,7 +129,7 @@ def main() -> int:
 
     for name in names:
         if name == "ui":
-            lines.append("## `defentra ui`")
+            lines.append("## `aegorx ui`")
             lines.append("")
             h = _help(sub_action.choices[name]) or top_helps.get(name, "")
             lines.append(f"_{h}_")

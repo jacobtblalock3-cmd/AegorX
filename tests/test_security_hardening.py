@@ -6,11 +6,11 @@ import stat
 
 import pytest
 
-from defentra.ml.elf_features import NotElfError, parse_elf
-from defentra.ml.pe_features import NotPEError, parse_pe
-from defentra.quarantine.vault import QuarantineVault
-from defentra.report import sanitize
-from defentra.realtime.monitor import AuditLog, verify_audit_log
+from aegorx.ml.elf_features import NotElfError, parse_elf
+from aegorx.ml.pe_features import NotPEError, parse_pe
+from aegorx.quarantine.vault import QuarantineVault
+from aegorx.report import sanitize
+from aegorx.realtime.monitor import AuditLog, verify_audit_log
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def _sample(tmp_path, name="mal.exe", content=b"MZ" + b"A" * 256):
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
 def test_state_dir_is_owner_only(tmp_home):
-    from defentra.utils import ensure_state_dir
+    from aegorx.utils import ensure_state_dir
 
     ensure_state_dir()
     mode = stat.S_IMODE(os.stat(tmp_home).st_mode)
@@ -205,7 +205,7 @@ def test_malformed_elf_raises_domain_error_only():
 
 
 def test_engine_survives_crafted_executable(tmp_home, rules_dir, tmp_path):
-    from defentra.engine import ScanEngine
+    from aegorx.engine import ScanEngine
 
     crafted = tmp_path / "crafted.exe"
     crafted.write_bytes(b"MZ" + b"\xcc" * 300)
@@ -216,7 +216,7 @@ def test_engine_survives_crafted_executable(tmp_home, rules_dir, tmp_path):
 
 
 def test_cli_audit_verify_command(tmp_home, capsys):
-    from defentra.cli import main as cli_main
+    from aegorx.cli import main as cli_main
 
     assert cli_main(["audit"]) == 3
     missing = os.path.join(tmp_home, "none.log")

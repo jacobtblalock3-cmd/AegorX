@@ -1,0 +1,26 @@
+[Unit]
+Description=AegorX DAS management console
+Documentation=https://github.com/jacobtblalock3-cmd/AegorX
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aegorx-admin
+Group=aegorx-admin
+Environment=AEGORX_HOME=/var/lib/aegorx-console
+ExecStart=/opt/aegorx/bin/aegorx admin serve --host 0.0.0.0 --port 8477 \
+    --tls-cert /etc/aegorx/tls/server.crt --tls-key /etc/aegorx/tls/server.key
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aegorx-console
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

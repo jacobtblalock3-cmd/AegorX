@@ -15,22 +15,22 @@ import zipfile
 import pytest
 
 from conftest import build_minimal_elf, build_minimal_pe
-from defentra.engine import ScanEngine
+from aegorx.engine import ScanEngine
 
 
 @pytest.fixture(scope="module")
 def engine():
     import tempfile
 
-    old = os.environ.get("DEFENTRA_HOME")
-    os.environ["DEFENTRA_HOME"] = tempfile.mkdtemp(prefix="defentra-detect-")
+    old = os.environ.get("AEGORX_HOME")
+    os.environ["AEGORX_HOME"] = tempfile.mkdtemp(prefix="aegorx-detect-")
     try:
         yield ScanEngine(enable_ml=False)
     finally:
         if old is None:
-            os.environ.pop("DEFENTRA_HOME", None)
+            os.environ.pop("AEGORX_HOME", None)
         else:
-            os.environ["DEFENTRA_HOME"] = old
+            os.environ["AEGORX_HOME"] = old
 
 
 def _scan(tmp_path, name, data, engine):

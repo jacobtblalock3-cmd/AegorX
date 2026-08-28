@@ -18,7 +18,7 @@ Cargo.lock
 *.quar
 vault.key
 signatures.db*
-defentra-home/
+aegorx-home/
 
 *private*.pem
 signing_private*

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from defentra.ml import modelhub
+from aegorx.ml import modelhub
 
 
 class FakeResp:
@@ -36,7 +36,7 @@ def make_opener(model_bytes, meta_bytes, seen_urls):
 
 
 def test_fetch_installs_model_and_meta(tmp_home, monkeypatch):
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", os.path.join(tmp_home, "models"))
+    monkeypatch.setenv("AEGORX_MODEL_DIR", os.path.join(tmp_home, "models"))
     model_bytes = b"\x00lgbm-fake-weights\x00"
     meta = {
         "source": "EMBER 2018",
@@ -57,7 +57,7 @@ def test_fetch_installs_model_and_meta(tmp_home, monkeypatch):
 
 
 def test_fetch_rejects_checksum_mismatch(tmp_home, monkeypatch):
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", os.path.join(tmp_home, "models"))
+    monkeypatch.setenv("AEGORX_MODEL_DIR", os.path.join(tmp_home, "models"))
     bad_meta = json.dumps({"model_sha256": "f" * 64}).encode()
     with pytest.raises(RuntimeError, match="checksum mismatch"):
         modelhub.fetch(
@@ -68,7 +68,7 @@ def test_fetch_rejects_checksum_mismatch(tmp_home, monkeypatch):
 
 
 def test_fetch_without_meta_still_installs(tmp_home, monkeypatch):
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", os.path.join(tmp_home, "models"))
+    monkeypatch.setenv("AEGORX_MODEL_DIR", os.path.join(tmp_home, "models"))
 
     def opener(url, timeout=0):
         if url.endswith(".meta.json"):
@@ -82,7 +82,7 @@ def test_fetch_without_meta_still_installs(tmp_home, monkeypatch):
 
 def test_installed_models_listing(tmp_home, monkeypatch):
     d = os.path.join(tmp_home, "models")
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", d)
+    monkeypatch.setenv("AEGORX_MODEL_DIR", d)
     os.makedirs(d)
     open(os.path.join(d, "a.lgbm"), "wb").write(b"x")
     open(os.path.join(d, "b.lgbm.meta.json"), "w").write("{}")
@@ -92,14 +92,14 @@ def test_installed_models_listing(tmp_home, monkeypatch):
 
 
 def test_cli_model_fetch_wiring(tmp_home, monkeypatch):
-    from defentra.cli import main as cli_main
+    from aegorx.cli import main as cli_main
 
-    monkeypatch.setenv("DEFENTRA_MODEL_DIR", os.path.join(tmp_home, "models"))
+    monkeypatch.setenv("AEGORX_MODEL_DIR", os.path.join(tmp_home, "models"))
     called = {}
 
     def fake_fetch(url=None, **kwargs):
         called["url"] = url
-        dest_dir = os.environ["DEFENTRA_MODEL_DIR"]
+        dest_dir = os.environ["AEGORX_MODEL_DIR"]
         os.makedirs(dest_dir, exist_ok=True)
         dest = os.path.join(dest_dir, "malware.lgbm")
         open(dest, "wb").write(b"x")
@@ -115,7 +115,7 @@ def test_classifier_picks_up_metadata_sidecar(tmp_home, tmp_path, monkeypatch):
     import sys
     import types
 
-    from defentra.ml.classifier import MalwareClassifier
+    from aegorx.ml.classifier import MalwareClassifier
 
     d = os.path.join(tmp_path, "models")
     os.makedirs(d)
@@ -153,7 +153,7 @@ def test_classifier_ignores_wrong_feature_count(tmp_path, monkeypatch):
     import sys
     import types
 
-    from defentra.ml.classifier import MalwareClassifier
+    from aegorx.ml.classifier import MalwareClassifier
 
     model_path = str(tmp_path / "bad.lgbm")
     open(model_path, "wb").write(b"x")

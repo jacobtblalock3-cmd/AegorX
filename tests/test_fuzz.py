@@ -11,12 +11,12 @@ import random
 
 import pytest
 
-from defentra.ml import elf_features as elf_mod
-from defentra.ml import pe_features as pe_mod
-from defentra.ml.ember_map import ember_record_to_features
-from defentra.realtime.fanotify_backend import parse_metadata
-from defentra.realtime.inotify_backend import parse_events
-from defentra.signing.feed import FeedError, canonical_payload, verify_document
+from aegorx.ml import elf_features as elf_mod
+from aegorx.ml import pe_features as pe_mod
+from aegorx.ml.ember_map import ember_record_to_features
+from aegorx.realtime.fanotify_backend import parse_metadata
+from aegorx.realtime.inotify_backend import parse_events
+from aegorx.signing.feed import FeedError, canonical_payload, verify_document
 
 RANDOM = random.Random(0xDEF7)
 
@@ -93,7 +93,7 @@ def test_fuzz_ember_mapper_tolerates_anything():
 
 
 def test_fuzz_feed_verifier_rejects_garbage():
-    doc = {"format": "defentra-signature-feed", "feed_version": 1, "signature": "QUJD"}
+    doc = {"format": "aegorx-signature-feed", "feed_version": 1, "signature": "QUJD"}
     for _ in range(40):
         mutated = dict(doc)
         for _ in range(RANDOM.randrange(1, 4)):
@@ -113,7 +113,7 @@ def test_canonical_payload_is_stable_and_injection_safe():
 
 
 def test_path_filter_never_raises_on_hostile_patterns():
-    from defentra.realtime.events import PathFilter
+    from aegorx.realtime.events import PathFilter
 
     filt = PathFilter(["*", "[!", "**/../../x", "(?i)y", "/[a-", "\\"])
     for path in ["", "/", "\x1b]0;pwn", "a" * 5000, "../../etc/passwd"]:
@@ -125,7 +125,7 @@ def test_path_filter_never_raises_on_hostile_patterns():
 
 def test_fuzz_pdf_analyzer_domain_results_only(tmp_path):
     """analyze_pdf must never raise on hostile input: list-of-dicts or None."""
-    from defentra.scanner.pdfdoc import analyze_pdf, looks_like_pdf
+    from aegorx.scanner.pdfdoc import analyze_pdf, looks_like_pdf
 
     valid = (
         b"%PDF-1.7\n"
@@ -153,7 +153,7 @@ def test_fuzz_pdf_inflate_budget_never_exceeded():
     """A decompression bomb inside a stream must respect the inflate budget."""
     import zlib
 
-    from defentra.scanner.pdfdoc import MAX_INFLATED_TOTAL_BYTES, _inflate_streams
+    from aegorx.scanner.pdfdoc import MAX_INFLATED_TOTAL_BYTES, _inflate_streams
 
     bomb = zlib.compress(b"A" * (MAX_INFLATED_TOTAL_BYTES * 4))
     data = b"%PDF-1.7\nstream\n" + bomb + b"\nendstream\n%%EOF\n"
@@ -164,7 +164,7 @@ def test_fuzz_pdf_inflate_budget_never_exceeded():
 
 def test_fuzz_archive_sniffer_random_bytes():
     """sniff_format / looks_like_archive must tolerate any byte sequence."""
-    from defentra.scanner.archives import looks_like_archive, sniff_format
+    from aegorx.scanner.archives import looks_like_archive, sniff_format
 
     for _ in range(30):
         blob = _random_bytes(RANDOM.randrange(0, 1024))
@@ -179,7 +179,7 @@ def test_fuzz_extract_archive_malformed_inputs(tmp_path):
     import tarfile
     import zipfile
 
-    from defentra.scanner.archives import ArchiveBomb, ArchiveError, extract_archive
+    from aegorx.scanner.archives import ArchiveBomb, ArchiveError, extract_archive
 
     # a real zip then mutate it heavily
     buf = io.BytesIO()

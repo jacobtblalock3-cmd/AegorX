@@ -1,0 +1,19 @@
+[Unit]
+Description=AegorX DAS managed agent
+Documentation=https://github.com/jacobtblalock3-cmd/AegorX
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/aegorx/bin/aegorx agent run
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target

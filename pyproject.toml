@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "defentra"
+name = "aegorx"
 version = "1.1.0"
-description = "Defentra - open-source AI-assisted antivirus engine"
+description = "AegorX - open-source AI-assisted antivirus engine"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Defentra Project" }]
+authors = [{ name = "AegorX Project" }]
 keywords = ["antivirus", "security", "malware", "yara", "machine-learning"]
 dependencies = ["cryptography>=41.0"]
 classifiers = [
@@ -25,8 +25,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jacobtblalock3-cmd/defentra"
-Security = "https://github.com/jacobtblalock3-cmd/defentra/blob/main/SECURITY.md"
+Homepage = "https://github.com/jacobtblalock3-cmd/AegorX"
+Security = "https://github.com/jacobtblalock3-cmd/AegorX/blob/main/SECURITY.md"
 
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
@@ -35,13 +35,13 @@ office = ["oletools>=0.40"]
 dev = ["pytest>=7.0", "pytest-timeout>=2.1"]
 
 [project.scripts]
-defentra = "defentra.cli:main"
+aegorx = "aegorx.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["defentra*"]
+include = ["aegorx*"]
 
 [tool.setuptools.package-data]
-"defentra.signing" = ["trusted_keys/*.pub"]
+"aegorx.signing" = ["trusted_keys/*.pub"]
 
 [tool.pytest.ini_options]
 filterwarnings = [

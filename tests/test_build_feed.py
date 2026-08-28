@@ -4,12 +4,12 @@ import os
 import pytest
 
 import build_feed as bf
-from defentra.signing.feed import load_feed, sign_document, verify_document
+from aegorx.signing.feed import load_feed, sign_document, verify_document
 
 
 @pytest.fixture
 def keypair(tmp_path):
-    from defentra.signing.keys import generate_keypair
+    from aegorx.signing.keys import generate_keypair
 
     return generate_keypair(str(tmp_path / "keys"))
 
@@ -55,7 +55,7 @@ def test_later_sources_override_conflicts(tmp_path):
 
 def test_build_feed_document_shape(extra_file):
     doc = bf.build_feed([extra_file], ttl_hours=24)
-    assert doc["format"] == "defentra-signature-feed"
+    assert doc["format"] == "aegorx-signature-feed"
     assert doc["feed_version"] == 1
     assert "signature" not in doc
     from datetime import datetime

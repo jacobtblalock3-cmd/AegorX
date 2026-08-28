@@ -1,7 +1,0 @@
-[Unit]
-Description=Defentra realtime protection liveness check
-Documentation=https://github.com/jacobtblalock3-cmd/defentra
-
-[Service]
-Type=oneshot
-ExecStart=/opt/defentra/bin/defentra watchdog --max-age 90 --service defentra-monitor

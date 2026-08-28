@@ -26,8 +26,8 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from defentra.signatures.db import SignatureDB
-from defentra.signing.feed import new_feed, save_feed, sign_document
+from aegorx.signatures.db import SignatureDB
+from aegorx.signing.feed import new_feed, save_feed, sign_document
 
 FEED_ENTRY_FIELDS = ("sha256", "md5", "sha1", "name", "family", "severity")
 

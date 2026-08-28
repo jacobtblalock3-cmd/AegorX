@@ -16,8 +16,8 @@ if SCRIPTS_DIR not in sys.path:
 
 @pytest.fixture
 def tmp_home(tmp_path, monkeypatch):
-    home = tmp_path / "defentra-home"
-    monkeypatch.setenv("DEFENTRA_HOME", str(home))
+    home = tmp_path / "aegorx-home"
+    monkeypatch.setenv("AEGORX_HOME", str(home))
     return str(home)
 
 
@@ -116,13 +116,13 @@ def eicar_file(tmp_path):
 @pytest.fixture
 def benign_file(tmp_path):
     p = tmp_path / "readme.txt"
-    p.write_bytes(b"hello defentra\n" * 10)
+    p.write_bytes(b"hello aegorx\n" * 10)
     return str(p)
 
 
 @pytest.fixture
 def rules_dir():
-    import defentra.engine as engine_mod
+    import aegorx.engine as engine_mod
 
     d = os.path.join(os.path.dirname(engine_mod.__file__), "..", "rules")
     return os.path.abspath(d)

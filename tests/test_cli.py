@@ -9,7 +9,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def run_cli(args):
     env = dict(os.environ)
     proc = subprocess.run(
-        [sys.executable, "-m", "defentra.cli"] + args,
+        [sys.executable, "-m", "aegorx.cli"] + args,
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
@@ -21,7 +21,7 @@ def run_cli(args):
 def test_version_flag():
     proc = run_cli(["--version"])
     assert proc.returncode == 0
-    assert proc.stdout.startswith("defentra ")
+    assert proc.stdout.startswith("aegorx ")
 
 
 def test_scan_json_exit_codes(tmp_home, rules_dir, eicar_file, benign_file):

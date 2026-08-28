@@ -10,10 +10,10 @@ import zipfile
 import pytest
 
 from conftest import EICAR
-from defentra.engine import ScanEngine
-from defentra.scanner import archives, office
+from aegorx.engine import ScanEngine
+from aegorx.scanner import archives, office
 
-BENIGN = b"hello defentra\n" * 20
+BENIGN = b"hello aegorx\n" * 20
 
 
 @pytest.fixture
@@ -136,11 +136,11 @@ def test_entry_count_cap(engine, tmp_path):
 
 
 def test_traversal_entry_name_cannot_escape(engine, tmp_path):
-    evil_name = "../../../defentra_pwned.txt"
+    evil_name = "../../../aegorx_pwned.txt"
     archive = _write(tmp_path / "slip.zip", _zip_bytes([(evil_name, BENIGN)]))
     result = engine.scan_file(archive)
     assert result.verdict == "clean"
-    outside = os.path.join(os.path.dirname(archive), "defentra_pwned.txt")
+    outside = os.path.join(os.path.dirname(archive), "aegorx_pwned.txt")
     assert not os.path.exists(outside)
 
 
@@ -168,7 +168,7 @@ def test_encrypted_zip_reported_unreadable(engine, tmp_path, monkeypatch):
 def test_no_temp_dirs_leaked_after_scan(engine, tmp_path):
     archive = _write(tmp_path / "leak.zip", _zip_bytes([("eicar.com", EICAR)]))
     engine.scan_file(archive)
-    leftovers = [d for d in os.listdir(tempfile.gettempdir()) if d.startswith("defentra-arch-")]
+    leftovers = [d for d in os.listdir(tempfile.gettempdir()) if d.startswith("aegorx-arch-")]
     assert leftovers == []
 
 

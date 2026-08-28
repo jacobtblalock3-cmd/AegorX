@@ -1,4 +1,4 @@
-//! Performance-critical primitives for the Defentra antivirus engine.
+//! Performance-critical primitives for the AegorX antivirus engine.
 //!
 //! The hashing core is dependency-light and testable without Python; the
 //! pyo3 bindings are opt-in via the `extension-module` feature so that
@@ -39,7 +39,7 @@ mod python_bindings {
     }
 
     #[pymodule]
-    fn _defentra_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    fn _aegorx_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_function(wrap_pyfunction!(stream_sha256, m)?)?;
         Ok(())
     }
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn empty_file_hashes_to_known_vector() {
-        let path = temp_file("defentra_core_empty", 0, b'a');
+        let path = temp_file("aegorx_core_empty", 0, b'a');
         assert_eq!(
             stream_sha256(path.to_str().unwrap()),
             Ok(EMPTY_SHA256.to_string())
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn million_a_hashes_to_known_vector() {
-        let path = temp_file("defentra_core_million_a", 1_000_000, b'a');
+        let path = temp_file("aegorx_core_million_a", 1_000_000, b'a');
         assert_eq!(
             stream_sha256(path.to_str().unwrap()),
             Ok(MILLION_A_SHA256.to_string())

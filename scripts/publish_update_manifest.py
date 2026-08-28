@@ -22,8 +22,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from defentra.signing.feed import sign_document  # noqa: E402
-from defentra.update import ARTIFACT_SUFFIXES, build_manifest  # noqa: E402
+from aegorx.signing.feed import sign_document  # noqa: E402
+from aegorx.update import ARTIFACT_SUFFIXES, build_manifest  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -52,7 +52,7 @@ def main(argv=None) -> int:
         with open(path, "rb") as fh:
             digest = hashlib.sha256(fh.read()).hexdigest()
         url = (
-            "https://github.com/jacobtblalock3-cmd/defentra/releases/download/"
+            "https://github.com/jacobtblalock3-cmd/AegorX/releases/download/"
             f"v{args.version}/{os.path.basename(path)}"
         )
         descriptors.append({"url": url, "sha256": digest, "size": os.path.getsize(path)})

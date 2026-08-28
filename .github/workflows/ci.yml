@@ -68,14 +68,14 @@ jobs:
           pathlib.Path("smoke-clean.txt").write_text("hello")
           PY
           # scanner exits 2 on malicious / 1 on suspicious by design; check output instead of pipeline status
-          rc=0; python -m defentra.cli scan smoke-eicar.com > smoke.out 2>&1 || rc=$?
+          rc=0; python -m aegorx.cli scan smoke-eicar.com > smoke.out 2>&1 || rc=$?
           cat smoke.out; [ "$rc" -eq 2 ]
           grep -q MALICIOUS smoke.out
-          rc=0; python -m defentra.cli scan smoke-clean.txt > clean.out 2>&1 || rc=$?
+          rc=0; python -m aegorx.cli scan smoke-clean.txt > clean.out 2>&1 || rc=$?
           cat clean.out; [ "$rc" -eq 0 ]
           grep -q "clean=0 suspicious=0 malicious=1" smoke.out
           grep -q "clean=1 suspicious=0 malicious=0" clean.out
-          python -m defentra.cli doctor > doctor.out 2>&1 || true
+          python -m aegorx.cli doctor > doctor.out 2>&1 || true
           grep -q "doctor:" doctor.out
 
   # Standalone frozen binaries: one-file executables for real-device testing.
@@ -103,12 +103,12 @@ jobs:
         run: |
           pip install . yara-python pyinstaller
       - name: Build standalone executable
-        run: pyinstaller --noconfirm --distpath dist-standalone scripts/frozen/defentra.spec
+        run: pyinstaller --noconfirm --distpath dist-standalone scripts/frozen/aegorx.spec
       - name: Smoke test the executable
         shell: bash
         run: |
-          EXE="dist-standalone/defentra"
-          [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/defentra.exe"
+          EXE="dist-standalone/aegorx"
+          [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/aegorx.exe"
           "$EXE" --version
           printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > e.bin
           rc=0; "$EXE" scan e.bin > out.txt 2>&1 || rc=$?
@@ -118,8 +118,8 @@ jobs:
           grep -q "trust-keys       1 pinned package key" doc.out
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: defentra-${{ matrix.platform }}
-          path: dist-standalone/defentra*
+          name: aegorx-${{ matrix.platform }}
+          path: dist-standalone/aegorx*
           if-no-files-found: error
 
 
@@ -166,10 +166,10 @@ jobs:
           sudo "$(which python)" -m pip install --quiet pytest yara-python
       - name: Realtime kernel integration tests (as root)
         env:
-          DEFENTRA_HOME: /tmp/defentra-integration
+          AEGORX_HOME: /tmp/aegorx-integration
         run: |
           cd "$(pwd)"
-          sudo --preserve-env=DEFENTRA_HOME "$(which python)" -m pytest tests/test_linux_integration.py -v
+          sudo --preserve-env=AEGORX_HOME "$(which python)" -m pytest tests/test_linux_integration.py -v
 
   security:
     runs-on: ubuntu-latest
@@ -182,7 +182,7 @@ jobs:
         run: pip install bandit[toml] pip-audit
       - name: SAST (bandit)
         run: |
-          bandit -r defentra scripts --severity-level medium --skip B101,B404,B603
+          bandit -r aegorx scripts --severity-level medium --skip B101,B404,B603
       - name: Dependency vulnerabilities (pip-audit)
         run: pip-audit --strict .
       - name: Secrets scan (pattern pass)

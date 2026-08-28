@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from defentra import shield
+from aegorx import shield
 
 
 def test_heartbeat_write_and_liveness(tmp_home):
@@ -27,7 +27,7 @@ def test_liveness_reports_missing_heartbeat(tmp_home):
 
 
 def test_liveness_detects_stale_or_dead(tmp_home):
-    home = os.environ["DEFENTRA_HOME"]
+    home = os.environ["AEGORX_HOME"]
     os.makedirs(home, exist_ok=True)
     stale_path = os.path.join(home, "heartbeat.json")
     with open(stale_path, "w") as fh:
@@ -37,7 +37,7 @@ def test_liveness_detects_stale_or_dead(tmp_home):
 
 
 def test_seal_and_verify_detects_tampering(tmp_home):
-    key_dir = os.path.join(os.environ["DEFENTRA_HOME"], "keys")
+    key_dir = os.path.join(os.environ["AEGORX_HOME"], "keys")
     os.makedirs(key_dir)
     target = os.path.join(key_dir, "corp.pub")
     with open(target, "w") as fh:
@@ -55,7 +55,7 @@ def test_seal_and_verify_detects_tampering(tmp_home):
 
 
 def test_verify_flags_deleted_anchor(tmp_home):
-    key_dir = os.path.join(os.environ["DEFENTRA_HOME"], "keys")
+    key_dir = os.path.join(os.environ["AEGORX_HOME"], "keys")
     os.makedirs(key_dir)
     target = os.path.join(key_dir, "gone.pub")
     open(target, "w").write("data")
@@ -71,7 +71,7 @@ def test_unsealed_state_is_reported(tmp_home):
 
 
 def test_cli_watchdog_and_protect(tmp_home, capsys):
-    from defentra.cli import main as cli_main
+    from aegorx.cli import main as cli_main
 
     # no heartbeat yet -> unhealthy; --no-restart keeps it from shelling out
     rc = cli_main(["watchdog", "--no-restart"])
@@ -88,7 +88,7 @@ def test_cli_watchdog_and_protect(tmp_home, capsys):
         assert cli_main(["protect", "check"]) == 0
         capsys.readouterr()
 
-        keys_dir = os.path.join(os.environ["DEFENTRA_HOME"], "keys")
+        keys_dir = os.path.join(os.environ["AEGORX_HOME"], "keys")
         os.makedirs(keys_dir, exist_ok=True)
         anchor = os.path.join(keys_dir, "corp.pub")
         with open(anchor, "w") as fh:

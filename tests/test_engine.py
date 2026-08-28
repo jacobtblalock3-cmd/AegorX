@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from defentra.engine import ScanEngine
+from aegorx.engine import ScanEngine
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def test_capabilities(tmp_home):
 
 
 def test_json_report_shape(engine, tmp_path, eicar_file):
-    from defentra.report import to_dict
+    from aegorx.report import to_dict
 
     results = engine.scan_target(eicar_file)
     payload = to_dict(results, eicar_file, 0.01)
@@ -64,7 +64,7 @@ def test_json_report_shape(engine, tmp_path, eicar_file):
 
 
 def test_quarantine_roundtrip(tmp_home, engine, eicar_file):
-    from defentra.quarantine.vault import QuarantineVault
+    from aegorx.quarantine.vault import QuarantineVault
 
     vault = QuarantineVault()
     entry = vault.quarantine(eicar_file, reason="test scan hit")
@@ -81,7 +81,7 @@ def test_quarantine_roundtrip(tmp_home, engine, eicar_file):
 def test_quarantine_delete(tmp_home, eicar_file):
     import os
 
-    from defentra.quarantine.vault import QuarantineVault
+    from aegorx.quarantine.vault import QuarantineVault
 
     vault = QuarantineVault()
     entry = vault.quarantine(eicar_file)

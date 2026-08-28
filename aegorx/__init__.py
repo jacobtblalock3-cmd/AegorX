@@ -1,0 +1,7 @@
+"""Defentra - open-source AI-assisted antivirus engine."""
+
+__version__ = "1.1.0"
+
+from aegorx.engine import Detection, FileScanResult, ScanEngine
+
+__all__ = ["Detection", "FileScanResult", "ScanEngine", "__version__"]

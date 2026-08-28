@@ -9,22 +9,33 @@
 | Fleet agent (check-ins, remote scans, telemetry) | ✅ | ✅ | ✅ |
 | **Real-time notification + quarantine** (FSEvents / RDCW) | ✅ | ✅ | ✅ |
 | **Blocking on-access protection** (fanotify / EndpointSecurity / minifilter) | ✅ root | ⚙️ requires driver | ⚙️ requires entitlement |
+| **Network protection** (DNS filtering, connection monitoring, threat intel feeds) | ✅ | ✅ | ✅ |
+| **DNS enforcement** (hosts file / iptables / pf) | ✅ root | ✅ | ✅ root |
+| **USB auto-scan** (removable media detection + scan) | ✅ | ✅ | ✅ |
+| **Scheduled scans** (systemd timer / launchd / schtasks) | ✅ | ✅ | ✅ |
+| **Browser download protection** (real-time download monitoring) | ✅ | ✅ | ✅ |
+| **Process memory scanning** (fileless malware detection) | ✅ | ✅ | ✅ |
+| **Ransomware canary detection** (honey files + behavior analysis) | ✅ | ✅ | ✅ |
+| **Outbound firewall** (block C2 connections, suspicious ports) | ✅ root | ✅ | ✅ root |
+| **Application control** (allowlist/blocklist by hash, path, extension) | ✅ | ✅ | ✅ |
+| **Vulnerability scanner** (detect unpatched software, CVE lookup) | ✅ | ✅ | ✅ |
+| **Encrypted DNS** (DoH/DoT — prevent DNS manipulation) | ✅ | ✅ | ✅ |
 | `.deb` package + systemd services | ✅ | — | — |
-| Standalone executable (`defentra.exe` / `defentra`) | CI-built* | ✅ | ✅ |
+| Standalone executable (`aegorx.exe` / `aegorx`) | CI-built* | ✅ | ✅ |
 | Windows installer (Inno Setup) | — | ✅ | — |
 | CI-validated on every push | ✅ ubuntu | ✅ windows-latest | ✅ macos-latest |
 
 \* A Linux standalone binary can be built with the same spec
-(`scripts/frozen/defentra.spec`); the deb remains the preferred Linux install.
+(`scripts/frozen/aegorx.spec`); the deb remains the preferred Linux install.
 
 ## Installing on Windows
 
-1. Download `DefentraSetup-<version>-windows-amd64.exe` from the project's
+1. Download `AegorXSetup-<version>-windows-amd64.exe` from the project's
    GitHub Releases and run it (or grab the portable
-   `defentra-<version>-windows-amd64.exe`).
-2. Verify: open a terminal → `defentra --version`.
-3. Scan something: `defentra scan C:\Users\you\Downloads`.
-4. Enable real-time protection: `defentra monitor C:\Users\you\Downloads` (runs
+   `aegorx-<version>-windows-amd64.exe`).
+2. Verify: open a terminal → `aegorx --version`.
+3. Scan something: `aegorx scan C:\Users\you\Downloads`.
+4. Enable real-time protection: `aegorx monitor C:\Users\you\Downloads` (runs
    in the terminal; use Task Scheduler for persistent background protection).
 
 Notes:
@@ -35,22 +46,22 @@ Notes:
 * Real-time protection uses `ReadDirectoryChangesW` for file-change
   detection and automatic quarantine.  Blocking on-access protection
   (denying file opens) requires a filesystem minifilter driver (planned).
-* To join a managed fleet: `defentra agent pair --server https://console:8477
-  --ca-cert server.crt --token <TOKEN>` then run `defentra agent run`
+* To join a managed fleet: `aegorx agent pair --server https://console:8477
+  --ca-cert server.crt --token <TOKEN>` then run `aegorx agent run`
   (a Windows service wrapper is on the roadmap; Task Scheduler works today).
 
 ## Installing on macOS
 
-1. Download `defentra-<version>-macos-arm64` from GitHub Releases:
+1. Download `aegorx-<version>-macos-arm64` from GitHub Releases:
    ```bash
-   curl -LO https://github.com/jacobtblalock3-cmd/defentra/releases/download/v<version>/defentra-<version>-macos-arm64
-   chmod +x defentra-<version>-macos-arm64
-   ./defentra-<version>-macos-arm64 --version
+   curl -LO https://github.com/jacobtblalock3-cmd/AegorX/releases/download/v<version>/aegorx-<version>-macos-arm64
+   chmod +x aegorx-<version>-macos-arm64
+   ./aegorx-<version>-macos-arm64 --version
    ```
 2. Gatekeeper may warn because the binary is unsigned/notarized yet — right-click → Open, or
-   `xattr -d com.apple.quarantine ./defentra-*` after verifying SHA256SUMS.
-3. Alternatively: `python3 -m pip install defentra` (Python 3.9+).
-4. Enable real-time protection: `defentra monitor ~/Downloads /Applications` (runs
+   `xattr -d com.apple.quarantine ./aegorx-*` after verifying SHA256SUMS.
+3. Alternatively: `python3 -m pip install aegorx` (Python 3.9+).
+4. Enable real-time protection: `aegorx monitor ~/Downloads /Applications` (runs
    in the terminal; use launchd for persistent background protection).
 
 ## What "scan-only" means off-Linux
@@ -72,8 +83,8 @@ the malicious file from being opened/executed in the first place.
 
 ```bash
 pip install . yara-python pyinstaller
-pyinstaller --noconfirm scripts/frozen/defentra.spec
-./dist-standalone/defentra --version
+pyinstaller --noconfirm scripts/frozen/aegorx.spec
+./dist-standalone/aegorx --version
 ```
 
 The spec bundles the pinned trust keys and YARA rules; the ML stack is

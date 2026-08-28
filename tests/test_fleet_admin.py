@@ -11,11 +11,11 @@ import urllib.request
 
 import pytest
 
-from defentra.management import agent as agent_mod
-from defentra.management.certs import generate_server_cert
-from defentra.management.protocol import make_command
-from defentra.management.server import ManagementServer
-from defentra.policy import load_policy, validate_policy
+from aegorx.management import agent as agent_mod
+from aegorx.management.certs import generate_server_cert
+from aegorx.management.protocol import make_command
+from aegorx.management.server import ManagementServer
+from aegorx.policy import load_policy, validate_policy
 
 
 @pytest.fixture
@@ -120,7 +120,7 @@ def test_revoked_agent_cannot_check_in(fleet):
 
 
 def test_apply_policy_command_end_to_end(fleet, tmp_home, monkeypatch):
-    from defentra.engine import ScanEngine
+    from aegorx.engine import ScanEngine
 
     _, agent = _enrolled_agent(fleet)
 
@@ -159,9 +159,9 @@ def test_policy_validation_rejects_unknown_fields():
 def test_monitor_merges_policy_exclusions(tmp_home):
     if not sys.platform.startswith("linux"):
         pytest.skip("backend selection requires Linux")
-    from defentra.policy import save_policy
-    from defentra.realtime.monitor import RealTimeMonitor
-    from defentra.engine import ScanEngine
+    from aegorx.policy import save_policy
+    from aegorx.realtime.monitor import RealTimeMonitor
+    from aegorx.engine import ScanEngine
 
     save_policy({"exclusions": ["/opt/trusted/*"], "backend": "inotify"})
     monitor = RealTimeMonitor(ScanEngine(enable_ml=False), ["/tmp"])
@@ -203,7 +203,7 @@ def test_scheduled_scan_honors_interval_and_reports(fleet, tmp_home, tmp_path):
 
 
 def test_unsigned_policy_command_rejected(fleet):
-    from defentra.management.protocol_errors import CommandRejected
+    from aegorx.management.protocol_errors import CommandRejected
 
     _, agent = _enrolled_agent(fleet, name="paranoid-1")
     envelope = {"body": {"command_id": "x", "command": "apply-policy", "args": {}, "issued_utc": 0, "expires_utc": 9e18}}
@@ -215,7 +215,7 @@ def test_unsigned_policy_command_rejected(fleet):
 
 
 def test_admin_cli_gen_certs_and_revoke_flow(tmp_path, tmp_home, capsys):
-    from defentra.cli import main as cli_main
+    from aegorx.cli import main as cli_main
 
     rc = cli_main(["admin", "gen-certs", "--out", str(tmp_path / "tls"), "--hostname", "fleet.test"])
     assert rc == 0
@@ -224,9 +224,9 @@ def test_admin_cli_gen_certs_and_revoke_flow(tmp_path, tmp_home, capsys):
     server = ManagementServer(db_path=str(tmp_path / "fleet.db"), host="127.0.0.1", port=0)
     token = server.issue_pairing_token("cli-device")
     server.store.enroll("cli-device", "-----BEGIN PUBLIC KEY-----\nX\n")
-    os.environ.setdefault("DEFENTRA_HOME", os.environ["DEFENTRA_HOME"])  # keep tmp_home
+    os.environ.setdefault("AEGORX_HOME", os.environ["AEGORX_HOME"])  # keep tmp_home
     import shutil
-    shutil.copy(str(tmp_path / "fleet.db"), os.path.join(os.environ["DEFENTRA_HOME"], "fleet.db"))
+    shutil.copy(str(tmp_path / "fleet.db"), os.path.join(os.environ["AEGORX_HOME"], "fleet.db"))
     rc = cli_main(["admin", "revoke", "cli-device"])
     assert rc == 0
 

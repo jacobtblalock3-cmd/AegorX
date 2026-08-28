@@ -1,11 +1,11 @@
-# Defentra
+# AegorX
 
-**Open-source AI-assisted antivirus engine** — the flagship project of the Defentra
+**Open-source AI-assisted antivirus engine** — the flagship project of the AegorX
 cybersecurity suite. Linux first program, with a Python scan core and a Rust performance layer.
 
 ```
-$ defentra scan ./suspicious-downloads/
-Defentra scan report
+$ aegorx scan ./suspicious-downloads/
+AegorX scan report
 Target : ./suspicious-downloads
 
   [MALICIOUS] ./suspicious-downloads/eicar.com
@@ -56,7 +56,7 @@ engines: signatures=1 | yara=2 rule file(s) | ml=not found (train with scripts/t
    entries are re-written under digest names. Compression-ratio and
    byte-budget breaches raise `Archive.BombSuspected` instead of grinding.
 5. **Office macros** — OLE documents get VBA risk analysis when the optional
-   `office` extra is installed (`pip install 'defentra[office]'`): auto-exec
+   `office` extra is installed (`pip install 'aegorx[office]'`): auto-exec
    chains that combine an entrypoint with process execution score malicious;
    risky APIs alone score suspicious; benign macros are noted info-level.
 6. **PDF** — auto-execution analysis: `/OpenAction`/`/AA` combined with
@@ -74,28 +74,28 @@ Exit codes: `0` clean · `1` suspicious · `2` malicious · `3` error.
 ## Quickstart
 
 ```bash
-git clone https://github.com/defentra/defentra && cd defentra
+git clone https://github.com/aegorx/aegorx && cd aegorx
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[yara,ml,quarantine,dev]"
 
-defentra scan /path/to/check          # on-demand scan
-defentra db stats                     # signature database info
-defentra model fetch                  # install the EMBER reference model (ML out-of-the-box)
-defentra model info                   # ML model status + provenance
-defentra quarantine list              # vault contents
+aegorx scan /path/to/check          # on-demand scan
+aegorx db stats                     # signature database info
+aegorx model fetch                  # install the EMBER reference model (ML out-of-the-box)
+aegorx model info                   # ML model status + provenance
+aegorx quarantine list              # vault contents
 ```
 
 ### Real-time protection (Linux)
 
 ```bash
 # blocking on-access mode (root): malicious files are DENIED at open time
-sudo defentra monitor --backend fanotify /
+sudo aegorx monitor --backend fanotify /
 
 # watch mode (unprivileged): scans new/modified files, quarantines threats
-defentra monitor ~/Downloads ~/tmp --backend inotify
+aegorx monitor ~/Downloads ~/tmp --backend inotify
 
 # exclude paths (repeatable fnmatch patterns)
-sudo defentra monitor / --exclude '/mnt/nfs/*' --exclude '*.iso'
+sudo aegorx monitor / --exclude '/mnt/nfs/*' --exclude '*.iso'
 ```
 
 | Backend    | Privileges | Behavior                                                        |
@@ -105,18 +105,18 @@ sudo defentra monitor / --exclude '/mnt/nfs/*' --exclude '*.iso'
 | `auto`     | —          | fanotify when running as root on Linux, else inotify             |
 
 Detections print to the console and append to a hash-chained audit log
-(`~/.defentra/realtime.log` by default). Run persistently with the provided
+(`~/.aegorx/realtime.log` by default). Run persistently with the provided
 unit file:
 
 ```bash
-sudo cp packaging/systemd/defentra-monitor.service /etc/systemd/system/
-sudo systemctl enable --now defentra-monitor
+sudo cp packaging/systemd/aegorx-monitor.service /etc/systemd/system/
+sudo systemctl enable --now aegorx-monitor
 ```
 
 ### Terminal dashboard
 
 ```bash
-defentra ui
+aegorx ui
 ```
 
 A minimal Linux-console experience: rounded panels over a dark canvas,
@@ -130,17 +130,17 @@ allows it.
 ### Signature feed updates
 
 Threat intelligence ships as **signed feeds** (Ed25519). Every install trusts
-the bundled root key (`defentra/signing/trusted_keys/`); feeds are verified,
+the bundled root key (`aegorx/signing/trusted_keys/`); feeds are verified,
 expiry-checked, and replay-protected before a single signature touches your
 DB. Feeds also carry **YARA rules** — the daily build embeds the current
 ruleset, and `feed update` swaps it in atomically (compile-validated first),
-so detection content improves on every machine without upgrading Defentra
+so detection content improves on every machine without upgrading AegorX
 itself. Running monitors hot-reload the new rules automatically:
 
 ```bash
-defentra feed update                     # fetch official feed, verify, apply
-defentra feed verify my-feed.json        # check any signed feed locally
-defentra keys list                       # show trusted keys + fingerprints
+aegorx feed update                     # fetch official feed, verify, apply
+aegorx feed verify my-feed.json        # check any signed feed locally
+aegorx keys list                       # show trusted keys + fingerprints
 ```
 
 ### Self-updating releases
@@ -151,24 +151,24 @@ verify the manifest, download the artifact, enforce the signed sha256 + size,
 and refuse downgrades:
 
 ```bash
-defentra update check                    # is a newer signed release available?
-sudo defentra update apply               # verify → download → apt/pip install
+aegorx update check                    # is a newer signed release available?
+sudo aegorx update apply               # verify → download → apt/pip install
 ```
 
-Fleet operators: `defentra admin send DEVICE check-update` reports per-device
+Fleet operators: `aegorx admin send DEVICE check-update` reports per-device
 update status through the console (see the
 [Operations Runbook](docs/OPERATIONS.md)).
 
 Publishing your own feed:
 
 ```bash
-defentra keys generate --out ~/signing   # once; keep the private key offline
+aegorx keys generate --out ~/signing   # once; keep the private key offline
 python - <<'EOF'
-from defentra.signing.feed import new_feed, save_feed
+from aegorx.signing.feed import new_feed, save_feed
 save_feed(new_feed([{"sha256": "<hash>", "name": "Win32.Family", "severity": 8}]), "feed.json")
 EOF
-defentra feed sign feed.json --key ~/signing/signing_private.pem
-defentra keys trust ~/signing/signing_public.pem   # recipients run this
+aegorx feed sign feed.json --key ~/signing/signing_private.pem
+aegorx keys trust ~/signing/signing_public.pem   # recipients run this
 ```
 
 The **official feed** is rebuilt and signed daily by GitHub Actions
@@ -181,33 +181,33 @@ PR to `feeds/community.json`.
 Run updates automatically with the provided timer:
 
 ```bash
-sudo cp packaging/systemd/defentra-feed-update.{service,timer} /etc/systemd/system/
-sudo systemctl enable --now defentra-feed-update.timer
+sudo cp packaging/systemd/aegorx-feed-update.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now aegorx-feed-update.timer
 ```
 
 ### Central administration (DAS Management Plane)
 
-For managed estates, Defentra ships a client/admin split: every endpoint runs a
+For managed estates, AegorX ships a client/admin split: every endpoint runs a
 **visible** `agent` service; your console sees the whole fleet and issues
 security-operations commands.
 
 ```bash
 # --- console side -----------------------------------------------------------
-defentra admin gen-certs --out /etc/defentra/tls --hostname console.corp
-defentra admin serve --host 0.0.0.0 --port 8477 \
-    --tls-cert /etc/defentra/tls/server.crt --tls-key /etc/defentra/tls/server.key
-defentra admin enroll-token --name workstation-01 --ttl-hours 8  # one-time token
-defentra admin agents                                # fleet status / last-seen
-defentra admin send workstation-01 scan-path --arg path=/home/alice
-defentra admin policy workstation-01 --file policy.json   # central exclusions/thresholds/schedule
-defentra admin revoke workstation-01                 # cut a device off immediately
-defentra admin results                               # command outcomes
-defentra admin detections                            # fleet-wide detections feed
+aegorx admin gen-certs --out /etc/aegorx/tls --hostname console.corp
+aegorx admin serve --host 0.0.0.0 --port 8477 \
+    --tls-cert /etc/aegorx/tls/server.crt --tls-key /etc/aegorx/tls/server.key
+aegorx admin enroll-token --name workstation-01 --ttl-hours 8  # one-time token
+aegorx admin agents                                # fleet status / last-seen
+aegorx admin send workstation-01 scan-path --arg path=/home/alice
+aegorx admin policy workstation-01 --file policy.json   # central exclusions/thresholds/schedule
+aegorx admin revoke workstation-01                 # cut a device off immediately
+aegorx admin results                               # command outcomes
+aegorx admin detections                            # fleet-wide detections feed
 
 # --- client side (once, then as a service) ----------------------------------
-sudo defentra agent pair --server https://console.corp:8477 \
+sudo aegorx agent pair --server https://console.corp:8477 \
     --ca-cert server.crt --token <TOKEN>
-sudo systemctl enable --now defentra-agent
+sudo systemctl enable --now aegorx-agent
 ```
 
 Security properties: pairing is token-gated, single-use, persisted server-side
@@ -226,14 +226,14 @@ deep-scan interval + paths executed by the agent between check-ins.
 ### Train your own ML detector
 
 The published EMBER reference model gives you ML detection immediately
-(`defentra model fetch` — see [models/README.md](models/README.md) for the
+(`aegorx model fetch` — see [models/README.md](models/README.md) for the
 trust model). To train on your own corpora:
 
 ```bash
 # two folders of labeled executables:
 python scripts/train_model.py \
     --benign /usr/bin --malicious ~/datasets/malware-samples
-# model is saved to ~/.defentra/models/malware.lgbm and auto-loaded
+# model is saved to ~/.aegorx/models/malware.lgbm and auto-loaded
 ```
 
 For the full-scale reference model, trigger **Actions -> Train reference model**
@@ -253,7 +253,7 @@ python scripts/train_ember.py \
 pip install maturin && cd rust-core && maturin develop --release
 ```
 
-The engine uses `_defentra_core.stream_sha256` automatically when present.
+The engine uses `_aegorx_core.stream_sha256` automatically when present.
 
 ## Roadmap
 
@@ -269,11 +269,11 @@ The engine uses `_defentra_core.stream_sha256` automatically when present.
 ## Contributing & Security
 
 PRs welcome — open an issue first for large changes. Report vulnerabilities
-privately to security@defentra.example (do not open public issues).
+privately to security@aegorx.example (do not open public issues).
 
 ## Disclaimer
 
-Defentra 1.0 is a first stable release: suitable for evaluation fleets and
+AegorX 1.0 is a first stable release: suitable for evaluation fleets and
 real-device testing, with blocking on-access enforcement CI-validated on
 current Linux kernels. It is still **not a drop-in replacement** for a mature
 commercial endpoint product — always test against the
@@ -295,7 +295,7 @@ the [Operations Runbook](docs/OPERATIONS.md). Highlights:
   `O_NOFOLLOW` on all writes, 0700 state dir / 0600 blobs / key stored apart,
   atomic index updates, chunked encryption to bound memory.
 - **Tamper-evident audit log**: realtime events land in a hash-chained JSONL
-  (`defentra audit verify`), with rotation.
+  (`aegorx audit verify`), with rotation.
 - **Terminal-escape-safe output**: malicious filenames cannot control your
   terminal via ANSI sequences.
 - **Supply chain**: CI runs tests on Python 3.9–3.13 plus bandit SAST,

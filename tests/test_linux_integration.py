@@ -15,10 +15,10 @@ import time
 
 import pytest
 
-from defentra.engine import ScanEngine
-from defentra.realtime.events import FileEvent, RealtimeUnavailableError
-from defentra.realtime.inotify_backend import InotifyBackend
-from defentra.realtime.monitor import RealTimeMonitor
+from aegorx.engine import ScanEngine
+from aegorx.realtime.events import FileEvent, RealtimeUnavailableError
+from aegorx.realtime.inotify_backend import InotifyBackend
+from aegorx.realtime.monitor import RealTimeMonitor
 
 linux_only = pytest.mark.skipif(sys.platform != "linux", reason="Linux integration only")
 root_only = pytest.mark.skipif(
@@ -30,8 +30,8 @@ EICAR = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
 @pytest.fixture(scope="module")
 def engine(tmp_path_factory):
-    home = tmp_path_factory.mktemp("defentra-home")
-    os.environ["DEFENTRA_HOME"] = str(home)
+    home = tmp_path_factory.mktemp("aegorx-home")
+    os.environ["AEGORX_HOME"] = str(home)
     rules = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules")
     return ScanEngine(rules_dirs=[rules], enable_ml=False)
 
@@ -53,7 +53,7 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
     self-deadlock the reader thread).
     """
     faulthandler.dump_traceback_later(110, exit=True, file=sys.__stderr__)
-    from defentra.realtime.fanotify_backend import FanotifyBackend
+    from aegorx.realtime.fanotify_backend import FanotifyBackend
 
     if not FanotifyBackend.available():
         pytest.skip("fanotify unavailable")
@@ -82,7 +82,7 @@ def test_fanotify_denies_malicious_open(engine, tmp_path):
         print(f"[fanotify-test] decide {event.path} -> {verdict}", flush=True)
         return verdict != "malicious"
 
-    backend = FanotifyBackend([str(watch)], excludes=[os.environ["DEFENTRA_HOME"] + "*"])
+    backend = FanotifyBackend([str(watch)], excludes=[os.environ["AEGORX_HOME"] + "*"])
     backend.decide = decide
     print("[fanotify-test] starting backend", flush=True)
     backend.start()
@@ -177,7 +177,7 @@ def test_systemd_units_are_valid():
             break
     if systemd_analyze is None:
         pytest.skip("systemd-analyze not available")
-    for name in ("defentra-monitor.service", "defentra-feed-update.service", "defentra-feed-update.timer"):
+    for name in ("aegorx-monitor.service", "aegorx-feed-update.service", "aegorx-feed-update.timer"):
         result = subprocess.run(
             [systemd_analyze, "verify", os.path.join(unit_dir, name)],
             capture_output=True,
@@ -197,10 +197,10 @@ def test_systemd_units_are_valid():
 @linux_only
 def test_feed_update_end_to_end_against_live_release(engine, tmp_home, monkeypatch):
     """Full client path: download official signed feed, verify, apply, detect."""
-    from defentra.signatures.db import SignatureDB
-    from defentra.cli import main as cli_main
+    from aegorx.signatures.db import SignatureDB
+    from aegorx.cli import main as cli_main
 
-    monkeypatch.setenv("DEFENTRA_HOME", str(tmp_home))
+    monkeypatch.setenv("AEGORX_HOME", str(tmp_home))
     rc = cli_main(["db", "seed"])
     assert rc == 0
     rc = cli_main(["feed", "update"])

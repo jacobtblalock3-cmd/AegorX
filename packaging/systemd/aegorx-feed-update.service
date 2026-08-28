@@ -1,0 +1,11 @@
+[Unit]
+Description=AegorX signature feed update
+Documentation=https://github.com/jacobtblalock3-cmd/AegorX
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aegorx/bin/aegorx feed update
+# non-fatal exit when the feed is unchanged since last apply
+SuccessExitStatus=0

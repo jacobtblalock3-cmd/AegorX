@@ -3,9 +3,9 @@ import os
 
 import pytest
 
-from defentra.cli import main as cli_main
-from defentra.signing.feed import new_feed, save_feed
-from defentra.signing.keys import generate_keypair, trusted_key_paths
+from aegorx.cli import main as cli_main
+from aegorx.signing.feed import new_feed, save_feed
+from aegorx.signing.keys import generate_keypair, trusted_key_paths
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def test_feed_sign_verify_update_flow(env, capsys, tmp_path):
     out = capsys.readouterr().out
     assert "applied 1 new signature(s)" in out
 
-    from defentra.signatures.db import SignatureDB
+    from aegorx.signatures.db import SignatureDB
 
     db = SignatureDB(None)
     assert db.lookup(sha256="c" * 64)["source"] == "feed"
@@ -85,15 +85,15 @@ def test_feed_verify_tampered(env, capsys):
 def test_trust_user_key_then_verify(env, capsys):
     _make_feed(env["feed"])
     cli_main(["feed", "sign", env["feed"], "--key", env["private"]])
-    fresh_home = {"DEFENTRA_HOME": os.path.join(env["home"], "fresh")}
-    old = os.environ.get("DEFENTRA_HOME")
-    os.environ["DEFENTRA_HOME"] = fresh_home["DEFENTRA_HOME"]
+    fresh_home = {"AEGORX_HOME": os.path.join(env["home"], "fresh")}
+    old = os.environ.get("AEGORX_HOME")
+    os.environ["AEGORX_HOME"] = fresh_home["AEGORX_HOME"]
     try:
         assert cli_main(["feed", "verify", env["signed"]]) == 3
         assert cli_main(["keys", "trust", env["public"]]) == 0
         assert cli_main(["feed", "verify", env["signed"]]) == 0
     finally:
         if old is None:
-            del os.environ["DEFENTRA_HOME"]
+            del os.environ["AEGORX_HOME"]
         else:
-            os.environ["DEFENTRA_HOME"] = old
+            os.environ["AEGORX_HOME"] = old

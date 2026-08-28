@@ -1,6 +1,6 @@
-# Defentra Operations Runbook
+# AegorX Operations Runbook
 
-Deployment guide and operational procedures for running Defentra as a managed
+Deployment guide and operational procedures for running AegorX as a managed
 fleet: one **management console** (DAS), many **protected endpoints**, and the
 detection-content pipeline that keeps both current.
 
@@ -15,7 +15,7 @@ trust model see [SECURITY.md](../SECURITY.md).
 ```
                 ┌────────────────────────────┐
                 │  management console (DAS)   │
-                │  defentra admin serve :8477 │
+                │  aegorx admin serve :8477 │
                 │  fleet.db · admin key · TLS │
                 └──────────┬─────────────────┘
         Ed25519-signed     │  HTTPS, per-device
@@ -23,10 +23,10 @@ trust model see [SECURITY.md](../SECURITY.md).
         + policy push      │  pinned server cert
                 ┌──────────┴─────────────────┐
                 │      managed endpoints      │
-                │  defentra agent run         │  ← check-in loop
-                │  defentra-monitor.service   │  ← fanotify blocking
-                │  defentra-feed-update.timer │  ← daily signed intel
-                │  defentra-watchdog.timer    │  ← liveness restarts
+                │  aegorx agent run         │  ← check-in loop
+                │  aegorx-monitor.service   │  ← fanotify blocking
+                │  aegorx-feed-update.timer │  ← daily signed intel
+                │  aegorx-watchdog.timer    │  ← liveness restarts
                 └─────────────────────────────┘
 ```
 
@@ -47,11 +47,11 @@ trust model see [SECURITY.md](../SECURITY.md).
 | Endpoints | Linux with `fanotify` (kernel 2.6.37+; blocking permission events used in production are CI-proven on modern kernels) |
 | Windows / macOS endpoints | Standalone builds from GitHub Releases — **scan-only fleet mode**: on-demand + scheduled scans, telemetry, self-updates; no kernel-enforced realtime yet ([details](PLATFORMS.md)) |
 | Realtime monitor | root / `CAP_SYS_ADMIN` — permission events require it |
-| Optional ML detection | x86_64/aarch64 Linux; model fetched via `defentra model fetch` |
+| Optional ML detection | x86_64/aarch64 Linux; model fetched via `aegorx model fetch` |
 
 Install on every machine (console and endpoints alike) from the channels in
-[RELEASE.md](../RELEASE.md): `apt install ./defentra_<version>_all.deb`,
-`pip install defentra`, or from source.
+[RELEASE.md](../RELEASE.md): `apt install ./aegorx_<version>_all.deb`,
+`pip install aegorx`, or from source.
 
 ---
 
@@ -61,22 +61,22 @@ Install on every machine (console and endpoints alike) from the channels in
 
 All console state lives in one directory — the fleet database, the admin
 signing key, and pairing records. Decide it once and export
-`DEFENTRA_HOME` for **every** console-side command so the CLI and the service
+`AEGORX_HOME` for **every** console-side command so the CLI and the service
 agree:
 
 ```bash
-sudo install -d -m 700 -o defentra-admin -g defentra-admin /var/lib/defentra-console
-echo 'export DEFENTRA_HOME=/var/lib/defentra-console' | sudo tee /etc/profile.d/defentra-console.sh
+sudo install -d -m 700 -o aegorx-admin -g aegorx-admin /var/lib/aegorx-console
+echo 'export AEGORX_HOME=/var/lib/aegorx-console' | sudo tee /etc/profile.d/aegorx-console.sh
 ```
 
-(If you skip this, everything defaults to `~/.defentra` of whatever user you
+(If you skip this, everything defaults to `~/.aegorx` of whatever user you
 run as — fine for evaluation, ambiguous for production.)
 
 ### 3.2 Bootstrap TLS
 
 ```bash
-sudo -u defentra-admin defentra admin gen-certs \
-    --out /etc/defentra/tls --hostname console.corp.example --days 825
+sudo -u aegorx-admin aegorx admin gen-certs \
+    --out /etc/aegorx/tls --hostname console.corp.example --days 825
 ```
 
 This writes `server.crt` / `server.key` (mode 0600). The certificate doubles
@@ -86,12 +86,12 @@ public CA is not required.
 ### 3.3 Run the console as a service
 
 ```bash
-sudo cp packaging/systemd/defentra-admin.service /etc/systemd/system/
+sudo cp packaging/systemd/aegorx-admin.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now defentra-admin
+sudo systemctl enable --now aegorx-admin
 ```
 
-The unit runs `defentra admin serve --host 0.0.0.0 --port 8477` with TLS via
+The unit runs `aegorx admin serve --host 0.0.0.0 --port 8477` with TLS via
 the certs above. Firewall accordingly — expose 8477/tcp only to networks where
 agents live; nothing else needs to reach the console.
 
@@ -100,7 +100,7 @@ agents live; nothing else needs to reach the console.
 
 ### 3.4 Back up before going live
 
-Stop the service and copy `/var/lib/defentra-console/fleet.db` plus
+Stop the service and copy `/var/lib/aegorx-console/fleet.db` plus
 `management_admin.key` to cold storage (see §10). Losing the admin key means
 every endpoint must re-pair under a new key.
 
@@ -112,7 +112,7 @@ On the console, mint a one-time pairing token bound to the device name
 (default TTL 24h; use short TTLs for batch enrollments):
 
 ```bash
-defentra admin enroll-token --name workstation-01 --ttl-hours 8
+aegorx admin enroll-token --name workstation-01 --ttl-hours 8
 # -> one-time token (shown once)
 ```
 
@@ -120,19 +120,19 @@ On the endpoint, pair with the console cert you generated in §3.2 — pinning i
 mandatory for any non-loopback server, and pairing refuses otherwise:
 
 ```bash
-sudo scp console.corp:/etc/defentra/tls/server.crt /usr/local/share/defentra-console.crt
-sudo defentra agent pair \
+sudo scp console.corp:/etc/aegorx/tls/server.crt /usr/local/share/aegorx-console.crt
+sudo aegorx agent pair \
     --server https://console.corp.example:8477 \
-    --ca-cert /usr/local/share/defentra-console.crt \
+    --ca-cert /usr/local/share/aegorx-console.crt \
     --token <ONE-TIME-TOKEN>
-sudo systemctl enable --now defentra-agent
+sudo systemctl enable --now aegorx-agent
 ```
 
 Verify both ends:
 
 ```bash
-defentra agent status          # endpoint: paired, last check-in
-defentra admin agents          # console: fleet list with last-seen/platform/version
+aegorx agent status          # endpoint: paired, last check-in
+aegorx admin agents          # console: fleet list with last-seen/platform/version
 ```
 
 Tokens are single-use, persisted server-side (they survive console restarts),
@@ -147,8 +147,8 @@ audit-logged.
 
 | Action | Command |
 |---|---|
-| List devices / last-seen | `defentra admin agents` |
-| Cut a device off immediately | `defentra admin revoke workstation-01` |
+| List devices / last-seen | `aegorx admin agents` |
+| Cut a device off immediately | `aegorx admin revoke workstation-01` |
 | Re-enroll after revoke | issue a fresh token; device pairs again under a new identity |
 
 Revocation takes effect on the next check-in attempt (403, audit-logged).
@@ -170,8 +170,8 @@ Policy documents ride the signed-command channel. Create `policy.json`:
 Push it:
 
 ```bash
-defentra admin policy workstation-01 --file policy.json
-defentra admin results --agent workstation-01   # confirm "status": "done"
+aegorx admin policy workstation-01 --file policy.json
+aegorx admin results --agent workstation-01   # confirm "status": "done"
 ```
 
 Schema (validated strictly client-side — unknown fields rejected even though
@@ -190,13 +190,13 @@ Absence of policy = stock behavior; every field is optional.
 ### 5.3 Remote commands
 
 ```bash
-defentra admin send workstation-01 ping
-defentra admin send workstation-01 status
-defentra admin send workstation-01 diag
-defentra admin send workstation-01 scan-path --arg path=/home/alice
-defentra admin send workstation-01 feed-update
-defentra admin send workstation-01 quarantine-list
-defentra admin send workstation-01 quarantine-delete --arg id=<item>
+aegorx admin send workstation-01 ping
+aegorx admin send workstation-01 status
+aegorx admin send workstation-01 diag
+aegorx admin send workstation-01 scan-path --arg path=/home/alice
+aegorx admin send workstation-01 feed-update
+aegorx admin send workstation-01 quarantine-list
+aegorx admin send workstation-01 quarantine-delete --arg id=<item>
 ```
 
 Commands queue server-side and execute when the device checks in (default
@@ -206,8 +206,8 @@ flows back into `admin detections`.
 ### 5.4 Watching the fleet
 
 ```bash
-defentra admin detections --limit 100   # fleet-wide detections feed
-defentra admin results                  # command outcomes
+aegorx admin detections --limit 100   # fleet-wide detections feed
+aegorx admin results                  # command outcomes
 ```
 
 Operational rhythm: check `agents` daily for stale last-seen (a device quiet
@@ -221,32 +221,32 @@ review the console audit log (`fleet.db` table `audit`) after any access change.
 ### 6.1 Signature feeds
 
 Endpoints pull the official Ed25519-signed feed daily via
-`defentra-feed-update.timer` (ships with the package):
+`aegorx-feed-update.timer` (ships with the package):
 
 ```bash
-sudo systemctl enable --now defentra-feed-update.timer
+sudo systemctl enable --now aegorx-feed-update.timer
 ```
 
 Manual update / verification at any time:
 
 ```bash
-sudo defentra feed update     # download → verify signature → apply atomically
-defentra db stats             # current signature count
+sudo aegorx feed update     # download → verify signature → apply atomically
+aegorx db stats             # current signature count
 ```
 
 Default feed: the rolling `signature-feed` GitHub Release rebuilt and re-signed
 daily by CI. Custom/air-gapped feeds: publish your own document and point
 `feed update --url <URL>` at it after installing your public key with
-`defentra keys trust`.
+`aegorx keys trust`.
 
 ### 6.2 ML model
 
 ```bash
-sudo defentra model fetch     # SHA256+signature-verified reference model
-defentra model info           # confirm load
+sudo aegorx model fetch     # SHA256+signature-verified reference model
+aegorx model info           # confirm load
 ```
 
-Override locations with `DEFENTRA_MODEL` (file) or `DEFENTRA_MODEL_DIR`
+Override locations with `AEGORX_MODEL` (file) or `AEGORX_MODEL_DIR`
 (directory) if you distribute models internally.
 
 ---
@@ -256,10 +256,10 @@ Override locations with `DEFENTRA_MODEL` (file) or `DEFENTRA_MODEL_DIR`
 Enable blocking on-access protection:
 
 ```bash
-sudo systemctl enable --now defentra-monitor
+sudo systemctl enable --now aegorx-monitor
 ```
 
-The unit runs `defentra monitor --backend fanotify /` as root (permission
+The unit runs `aegorx monitor --backend fanotify /` as root (permission
 events require it). Behavior: opens of marked files block until the engine
 decides; malicious verdicts deny the open outright; scanner self-activity is
 exempt via its own PID guard and fd-based scanning, so scanning never loops.
@@ -269,23 +269,23 @@ Notes:
 * `backend: auto` falls back to non-blocking `inotify` watching when fanotify
   is unavailable (e.g. missing privileges); prefer explicit `fanotify` in
   policy for enforcement-critical hosts.
-* Set `DEFENTRA_FANOTIFY_DEBUG=1` on the unit for per-event debug lines when
+* Set `AEGORX_FANOTIFY_DEBUG=1` on the unit for per-event debug lines when
   diagnosing.
 * Liveness is watchdogged — install the timer so stale monitors restart:
 
 ```bash
-sudo cp packaging/systemd/defentra-watchdog.{service,timer} /etc/systemd/system/
-sudo systemctl enable --now defentra-watchdog.timer
+sudo cp packaging/systemd/aegorx-watchdog.{service,timer} /etc/systemd/system/
+sudo systemctl enable --now aegorx-watchdog.timer
 ```
 
-The watchdog restarts `defentra-monitor` when its heartbeat exceeds the
+The watchdog restarts `aegorx-monitor` when its heartbeat exceeds the
 staleness threshold (default 90 s; tune with `--max-age`).
 
 ---
 
 ## 8. State directory reference
 
-Everything mutable lives under `DEFENTRA_HOME` (default `~/.defentra`):
+Everything mutable lives under `AEGORX_HOME` (default `~/.aegorx`):
 
 | Path | Side | Contents |
 |---|---|---|
@@ -303,10 +303,10 @@ Everything mutable lives under `DEFENTRA_HOME` (default `~/.defentra`):
 Integrity checks:
 
 ```bash
-defentra audit verify                    # chain of realtime.log
-defentra audit verify ~/.defentra/agent-audit.log
-sudo defentra protect seal               # pin trust-anchor hashes
-sudo defentra protect check              # detect tampering later
+aegorx audit verify                    # chain of realtime.log
+aegorx audit verify ~/.aegorx/agent-audit.log
+sudo aegorx protect seal               # pin trust-anchor hashes
+sudo aegorx protect check              # detect tampering later
 ```
 
 Run `protect seal` once right after enrollment; schedule or spot-run `check`
@@ -323,9 +323,9 @@ artifacts. Endpoints verify the manifest against the pinned root keys, enforce
 the signed sha256 + size on download, and refuse downgrades/rollbacks:
 
 ```bash
-sudo defentra update check               # report newer signed release
-sudo defentra update apply               # verify → download → apt-get/pip install
-sudo defentra update apply --kind wheel  # force a channel (deb|wheel)
+sudo aegorx update check               # report newer signed release
+sudo aegorx update apply               # verify → download → apt-get/pip install
+sudo aegorx update apply --kind wheel  # force a channel (deb|wheel)
 ```
 
 Notes:
@@ -335,17 +335,17 @@ Notes:
 * Manifests expire (14-day TTL). A host offline past expiry needs
   `--allow-expired` to apply, which is safe: signature and checksums still
   gate everything.
-* Fleet visibility: `defentra admin send DEVICE check-update` returns the
+* Fleet visibility: `aegorx admin send DEVICE check-update` returns the
   device's current vs. available version through the normal result pipeline.
 
 ### 9.2 Manual upgrades
 
 1. Verify the release: check `SHA256SUMS` against downloaded artifacts.
-2. Upgrade the package (deb: `apt install ./defentra_<new>_all.deb`, pip:
-   `pip install -U defentra`).
-3. Restart services: `systemctl restart defentra-admin defentra-agent
-   defentra-monitor` as applicable.
-4. Smoke-test: `defentra db stats`, `defentra model info`, then one
+2. Upgrade the package (deb: `apt install ./aegorx_<new>_all.deb`, pip:
+   `pip install -U aegorx`).
+3. Restart services: `systemctl restart aegorx-admin aegorx-agent
+   aegorx-monitor` as applicable.
+4. Smoke-test: `aegorx db stats`, `aegorx model info`, then one
    `admin send <device> ping` end-to-end.
 
 Fleet-wide: push `feed-update` via the console after upgrading endpoints so
@@ -359,11 +359,11 @@ fleet DB upgrades itself in place on first start.
 **Console (the important side):**
 
 ```bash
-sudo systemctl stop defentra-admin
-sudo tar czf /secure/defentra-console-backup.tgz \
-    -C /var/lib/defentra-console fleet.db management_admin.key \
-    -C /etc/defentra tls
-sudo systemctl start defentra-admin
+sudo systemctl stop aegorx-admin
+sudo tar czf /secure/aegorx-console-backup.tgz \
+    -C /var/lib/aegorx-console fleet.db management_admin.key \
+    -C /etc/aegorx tls
+sudo systemctl start aegorx-admin
 ```
 
 Restore = stop service, untar into the same paths, start. Test restores
@@ -379,18 +379,18 @@ feeds/models re-download. If you want bit-exact continuity, archive `agent.json`
 
 **Compromised or stolen endpoint**
 
-1. `defentra admin revoke <device>` — immediate credential cutoff.
-2. Pull history: `defentra admin results --agent <device>` and
-   `defentra admin detections` for what it saw/reported.
+1. `aegorx admin revoke <device>` — immediate credential cutoff.
+2. Pull history: `aegorx admin results --agent <device>` and
+   `aegorx admin detections` for what it saw/reported.
 3. Rebuild the host; re-enroll fresh with a new name only if trusted again.
 
 **Suspicious detection triage**
 
 ```bash
-defentra admin detections                       # what/where/which detector
-defentra admin send <device> scan-path --arg path=<dir>   # sweep neighbors
-defentra admin send <device> quarantine-list
-defentra admin send <device> quarantine-delete --arg id=<id>   # dispose
+aegorx admin detections                       # what/where/which detector
+aegorx admin send <device> scan-path --arg path=<dir>   # sweep neighbors
+aegorx admin send <device> quarantine-list
+aegorx admin send <device> quarantine-delete --arg id=<id>   # dispose
 ```
 
 Quarantined items are Fernet-encrypted at rest; deletion is permanent.
@@ -398,8 +398,8 @@ Quarantined items are Fernet-encrypted at rest; deletion is permanent.
 **Suspected tampering with protection itself**
 
 ```bash
-sudo defentra protect check     # trust anchors vs sealed manifest
-defentra audit verify            # audit chain integrity
+sudo aegorx protect check     # trust anchors vs sealed manifest
+aegorx audit verify            # audit chain integrity
 ```
 
 Any mismatch: treat the host as compromised, escalate to revocation above.
@@ -413,14 +413,14 @@ Any mismatch: treat the host as compromised, escalate to revocation above.
 | Pairing returns 403 | Token expired, already used, or revoked — mint a new one (`admin enroll-token`). Check clock skew. |
 | Pairing rejects URL | Off-host HTTP(S) without `--ca-cert`. Pin the cert first (§4). |
 | TLS error on pair/click-in | Server cert regenerated but clients pin the old one — redistribute `server.crt`, or restore the original cert/key. |
-| Agent never appears in `admin agents` | Network/firewall to :8477; console actually running with TLS; `journalctl -u defentra-agent` for check-in errors. |
+| Agent never appears in `admin agents` | Network/firewall to :8477; console actually running with TLS; `journalctl -u aegorx-agent` for check-in errors. |
 | Device stopped checking in | It was revoked, or token rotated — `admin agents` shows last-seen; re-enroll if needed. |
 | Command stuck "pending" | Endpoint offline until next check-in (60 s default). Long queues drain ≤20 per check-in. |
 | Command result "rejected" | Signature invalid or expired envelope — verify console clock; never hand-forge envelopes. |
 | Monitor not blocking | Not root / no CAP_SYS_ADMIN; backend fell back to inotify. Run unit as root, set `backend: fanotify` in policy. |
-| Opens blocked forever on a file | Scanner decision path wedged — check `journalctl -u defentra-monitor`; `DEFENTRA_FANOTIFY_DEBUG=1` for event traces; watchdog should restart it. |
-| `feed update` exits nonzero repeatedly | Feed signature failed against trusted keys — do not force; inspect `defentra keys list` and the feed source. |
+| Opens blocked forever on a file | Scanner decision path wedged — check `journalctl -u aegorx-monitor`; `AEGORX_FANOTIFY_DEBUG=1` for event traces; watchdog should restart it. |
+| `feed update` exits nonzero repeatedly | Feed signature failed against trusted keys — do not force; inspect `aegorx keys list` and the feed source. |
 
-Environment variables that matter: `DEFENTRA_HOME` (state dir override),
-`DEFENTRA_MODEL` / `DEFENTRA_MODEL_DIR` (model placement),
-`DEFENTRA_FANOTIFY_DEBUG` (event tracing).
+Environment variables that matter: `AEGORX_HOME` (state dir override),
+`AEGORX_MODEL` / `AEGORX_MODEL_DIR` (model placement),
+`AEGORX_FANOTIFY_DEBUG` (event tracing).

@@ -61,10 +61,10 @@ def main(argv=None) -> int:
     parser.add_argument("--rounds", type=int, default=3, help="scan repetitions to average")
     args = parser.parse_args(argv)
 
-    from defentra import __version__
-    from defentra.engine import ScanEngine
+    from aegorx import __version__
+    from aegorx.engine import ScanEngine
 
-    root = tempfile.mkdtemp(prefix="defentra-bench-")
+    root = tempfile.mkdtemp(prefix="aegorx-bench-")
     try:
         total_bytes = build_corpus(root, args.files, args.size_kb)
         print(f"corpus: {args.files} files x {args.size_kb}KB = {total_bytes / 1e6:.1f} MB")

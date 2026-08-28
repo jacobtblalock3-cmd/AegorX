@@ -1,0 +1,7 @@
+[Unit]
+Description=AegorX realtime protection liveness check
+Documentation=https://github.com/jacobtblalock3-cmd/AegorX
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aegorx/bin/aegorx watchdog --max-age 90 --service aegorx-monitor

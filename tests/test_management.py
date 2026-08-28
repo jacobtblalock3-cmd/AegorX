@@ -10,10 +10,10 @@ import urllib.request
 
 import pytest
 
-from defentra.management import agent as agent_mod
-from defentra.management.protocol import ALLOWED_COMMANDS, make_command, verify_command
-from defentra.management.protocol_errors import CommandRejected
-from defentra.management.server import ManagementServer
+from aegorx.management import agent as agent_mod
+from aegorx.management.protocol import ALLOWED_COMMANDS, make_command, verify_command
+from aegorx.management.protocol_errors import CommandRejected
+from aegorx.management.server import ManagementServer
 
 
 class _Resp:

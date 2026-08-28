@@ -82,7 +82,7 @@ jobs:
       - name: Upload model artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: defentra-ember-model-${{ github.run_id }}
+          name: aegorx-ember-model-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: error
 
@@ -91,16 +91,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp artifacts/malware-ember.lgbm defentra-ember-reference.lgbm
-          cp artifacts/malware-ember.lgbm.meta.json defentra-ember-reference.lgbm.meta.json
+          cp artifacts/malware-ember.lgbm aegorx-ember-reference.lgbm
+          cp artifacts/malware-ember.lgbm.meta.json aegorx-ember-reference.lgbm.meta.json
           TAG=reference-model
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes --cleanup-tag
           fi
           AUC=$(python3 -c "import json;print(json.load(open('artifacts/malware-ember.lgbm.meta.json'))['test_auc'])")
           gh release create "$TAG" \
-            defentra-ember-reference.lgbm \
-            defentra-ember-reference.lgbm.meta.json \
+            aegorx-ember-reference.lgbm \
+            aegorx-ember-reference.lgbm.meta.json \
             artifacts/SHA256SUMS \
-            --title "Defentra reference model (EMBER-2018)" \
-            --notes "LightGBM static classifier trained on EMBER-2018. Held-out ROC-AUC: $AUC. Verify model_sha256 via SHA256SUMS; metadata sidecar is Ed25519-signed. Install with: defentra model install"
+            --title "AegorX reference model (EMBER-2018)" \
+            --notes "LightGBM static classifier trained on EMBER-2018. Held-out ROC-AUC: $AUC. Verify model_sha256 via SHA256SUMS; metadata sidecar is Ed25519-signed. Install with: aegorx model install"

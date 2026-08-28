@@ -33,5 +33,5 @@ Rules:
 - Submissions land in `feeds/community.json`; maintainers review via PR before
   the next scheduled build publishes them.
 
-The built-in seed list (`defentra/signatures/db.py`) is always included
+The built-in seed list (`aegorx/signatures/db.py`) is always included
 automatically; no need to duplicate EICAR here.

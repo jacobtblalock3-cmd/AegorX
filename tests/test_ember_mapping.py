@@ -1,6 +1,6 @@
 import pytest
 
-from defentra.ml.ember_map import (
+from aegorx.ml.ember_map import (
     CHARACTERISTIC_BITS,
     DLL_CHARACTERISTIC_BITS,
     _as_int,
@@ -8,7 +8,7 @@ from defentra.ml.ember_map import (
     ember_record_to_features,
     parse_label,
 )
-from defentra.ml.features import FEATURE_NAMES, vectorize
+from aegorx.ml.features import FEATURE_NAMES, vectorize
 
 
 def sample_ember_record() -> dict:

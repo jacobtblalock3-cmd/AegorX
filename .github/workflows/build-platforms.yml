@@ -44,13 +44,13 @@ jobs:
           pip install . yara-python pyinstaller
 
       - name: Build standalone executable
-        run: pyinstaller --noconfirm --distpath dist-standalone scripts/frozen/defentra.spec
+        run: pyinstaller --noconfirm --distpath dist-standalone scripts/frozen/aegorx.spec
 
       - name: Smoke test executable
         shell: bash
         run: |
-          EXE="dist-standalone/defentra"
-          [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/defentra.exe"
+          EXE="dist-standalone/aegorx"
+          [ "$RUNNER_OS" = "Windows" ] && EXE="dist-standalone/aegorx.exe"
           "$EXE" --version
           printf 'X5O!P%%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > e.bin
           rc=0; "$EXE" scan e.bin > out.txt 2>&1 || rc=$?
@@ -63,12 +63,12 @@ jobs:
           VERSION=$(python -c "
           import re
           print(re.search(r'^version = \"(.+)\"', open('pyproject.toml').read(), re.M).group(1))")
-          echo "DEFENTRA_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "AEGORX_VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p release-out
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp dist-standalone/defentra.exe "release-out/defentra-$VERSION-windows-amd64.exe"
+            cp dist-standalone/aegorx.exe "release-out/aegorx-$VERSION-windows-amd64.exe"
           else
-            cp dist-standalone/defentra "release-out/defentra-$VERSION-macos-arm64"
+            cp dist-standalone/aegorx "release-out/aegorx-$VERSION-macos-arm64"
           fi
 
       - name: Build Windows installer (Inno Setup)
@@ -77,7 +77,7 @@ jobs:
         run: |
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           if [ -f "$ISCC" ]; then
-            "$ISCC" //DAppVersion="$DEFENTRA_VERSION" packaging/windows-installer.iss
+            "$ISCC" //DAppVersion="$AEGORX_VERSION" packaging/windows-installer.iss
             cp packaging/installer-out/*.exe release-out/
             ls -la release-out/
           else
@@ -87,7 +87,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: defentra-platform-${{ matrix.platform }}
+          name: aegorx-platform-${{ matrix.platform }}
           path: release-out/*
           if-no-files-found: error
 

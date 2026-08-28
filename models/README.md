@@ -1,12 +1,12 @@
 # Reference Model Distribution
 
-Defentra's out-of-the-box ML detection ships as a **release artifact**, not in
+AegorX's out-of-the-box ML detection ships as a **release artifact**, not in
 git: LightGBM binaries do not belong in version control and users should always
 be able to verify what they download.
 
 ## Dataset availability (important)
 
-Defentra trains on **raw** EMBER 2018 records (JSONL with
+AegorX trains on **raw** EMBER 2018 records (JSONL with
 `general`/`header`/`section`/`imports` fields) so that training features are
 identical to what the runtime extractor computes at scan time.
 
@@ -17,7 +17,7 @@ hosts:
 |---|---|
 | `pubdata.endgame.com/ember/ember_dataset.tar.bz2` | dead (domain retired) |
 | `data.srimmer.xyz/ember/ember_dataset.tar.bz2` | dead |
-| `ember.elastic.co/ember_dataset.tar.bz2` | serves **precomputed 2351-dim vectors only** (`train_features_*.jsonl`) — NOT trainable by Defentra |
+| `ember.elastic.co/ember_dataset.tar.bz2` | serves **precomputed 2351-dim vectors only** (`train_features_*.jsonl`) — NOT trainable by AegorX |
 
 The trainer and CI workflow detect vector-only inputs and fail with a clear
 message instead of training a model that could never be loaded at runtime.
@@ -33,8 +33,8 @@ default workflow input at it.
 
 1. Trigger **Actions -> Train reference model** (workflow_dispatch) on GitHub.
    The runner downloads EMBER 2018 (~800 MB compressed, >1M labeled PE files),
-   maps every record onto Defentra's runtime feature schema
-   (`defentra/ml/ember_map.py`), trains LightGBM, evaluates AUC on the official
+   maps every record onto AegorX's runtime feature schema
+   (`aegorx/ml/ember_map.py`), trains LightGBM, evaluates AUC on the official
    held-out test split, and uploads `malware-ember.lgbm` +
    `malware-ember.lgbm.meta.json` + `SHA256SUMS` as build artifacts.
 2. Download the artifacts locally and publish:
@@ -43,19 +43,19 @@ default workflow input at it.
    gh release create model-YYYYMMDD --draft \
        --title "EMBER reference model" \
        --notes "AUC=<from meta>; trained per models/README.md"
-   cp malware-ember.lgbm defentra-ember-reference.lgbm
+   cp malware-ember.lgbm aegorx-ember-reference.lgbm
    gh release upload model-YYYYMMDD \
-       defentra-ember-reference.lgbm malware-ember.lgbm.meta.json
+       aegorx-ember-reference.lgbm malware-ember.lgbm.meta.json
    ```
 
-   The asset name `defentra-ember-reference.lgbm` is what
-   `defentra model fetch` resolves against the latest release.
+   The asset name `aegorx-ember-reference.lgbm` is what
+   `aegorx model fetch` resolves against the latest release.
 
 ## What users get
 
 ```bash
-defentra model fetch     # downloads latest release asset into ~/.defentra/models/
-defentra model info      # provenance: source dataset, AUC, feature version, sha256
+aegorx model fetch     # downloads latest release asset into ~/.aegorx/models/
+aegorx model info      # provenance: source dataset, AUC, feature version, sha256
 ```
 
 `fetch` verifies the downloaded file against the SHA256 recorded in the
@@ -67,7 +67,7 @@ picks the model up automatically on the next scan or monitor session.
 - The metadata sidecar is plain JSON fetched over HTTPS from the same release;
   it provides integrity (accidental corruption) but is not a cryptographic
   signature chain. For stronger guarantees, pin a specific release tag URL:
-  `defentra model fetch --url https://github.com/.../download/<tag>/...`.
+  `aegorx model fetch --url https://github.com/.../download/<tag>/...`.
 - EMBER 2018 covers Windows PE samples up to 2018. It will not catch post-2018
   families reliably; treat it as a baseline, not a substitute for signature
   feeds and YARA rules. Retrain periodically on fresher corpora.

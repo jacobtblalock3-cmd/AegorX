@@ -7,7 +7,7 @@ import pytest
 
 import build_feed as bf
 import fetch_intel as fi
-from defentra.signing.feed import new_feed, sign_document, verify_document
+from aegorx.signing.feed import new_feed, sign_document, verify_document
 
 
 MB_OK = {
@@ -198,7 +198,7 @@ def test_store_feeds_into_signed_feed_pipeline(tmp_path):
     store_path.write_text(json.dumps(store))
 
     doc = bf.build_feed([str(store_path)])
-    from defentra.signing.keys import generate_keypair
+    from aegorx.signing.keys import generate_keypair
 
     keypair = generate_keypair(str(tmp_path / "keys"))
     signed = sign_document(doc, keypair[0])

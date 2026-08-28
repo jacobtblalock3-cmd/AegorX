@@ -1,11 +1,11 @@
 [package]
-name = "defentra-core"
+name = "aegorx-core"
 version = "0.1.0"
 edition = "2021"
-description = "Performance-critical primitives for the Defentra antivirus engine"
+description = "Performance-critical primitives for the AegorX antivirus engine"
 
 [lib]
-name = "_defentra_core"
+name = "_aegorx_core"
 crate-type = ["cdylib"]
 
 [dependencies]

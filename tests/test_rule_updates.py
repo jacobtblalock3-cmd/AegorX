@@ -6,9 +6,9 @@ import time
 
 import pytest
 
-from defentra.engine import ScanEngine
-from defentra.rules_store import RuleStoreError, current_rules, install_rules, rules_dir
-from defentra.signing.feed import FeedError, new_feed, sanitize_rule_entries
+from aegorx.engine import ScanEngine
+from aegorx.rules_store import RuleStoreError, current_rules, install_rules, rules_dir
+from aegorx.signing.feed import FeedError, new_feed, sanitize_rule_entries
 
 GOOD_RULE = """
 rule Feed_Test_Family_Generic
@@ -52,8 +52,8 @@ def test_sanitize_normalizes_and_rejects_mismatch(tmp_home):
 
 
 def test_new_feed_embeds_rules_and_signing_covers_them(tmp_path):
-    from defentra.signing.feed import sign_document, verify_document
-    from defentra.signing.keys import generate_keypair
+    from aegorx.signing.feed import sign_document, verify_document
+    from aegorx.signing.keys import generate_keypair
 
     keypair = generate_keypair(str(tmp_path / "kp"))
     doc = new_feed([], rules=[_entry()], ttl_hours=24)
@@ -116,7 +116,7 @@ def test_engine_detects_sample_via_feed_delivered_rule(tmp_home, tmp_path):
 
 def test_yara_scanner_hot_reload(tmp_home):
     pytest.importorskip("yara")
-    from defentra.scanner.yara_scanner import YaraScanner
+    from aegorx.scanner.yara_scanner import YaraScanner
 
     live_dir = rules_dir()
     scanner = YaraScanner(rules_dirs=[live_dir])
@@ -133,9 +133,9 @@ def test_yara_scanner_hot_reload(tmp_home):
 
 
 def test_feed_update_cli_installs_rules(tmp_home, tmp_path, capsys):
-    from defentra.cli import main as cli_main
-    from defentra.signing.feed import new_feed, save_feed, sign_document
-    from defentra.signing.keys import generate_keypair, trust_public_key
+    from aegorx.cli import main as cli_main
+    from aegorx.signing.feed import new_feed, save_feed, sign_document
+    from aegorx.signing.keys import generate_keypair, trust_public_key
 
     _, public_key = generate_keypair(str(tmp_path / "keys"))
     trust_public_key(public_key)
@@ -167,7 +167,7 @@ def test_feed_update_cli_installs_rules(tmp_home, tmp_path, capsys):
     doc3 = new_feed([], rules=[], ttl_hours=24)
     doc3["generated_utc"] = "2099-01-01T00:00:00+00:00"
     doc3["expires_utc"] = "2099-02-01T00:00:00+00:00"
-    from defentra.signing.feed import sign_document as sd
+    from aegorx.signing.feed import sign_document as sd
 
     resigned = sd(doc3, str(tmp_path / "keys" / "signing_private.pem"))
     save_feed(resigned, empty_file)

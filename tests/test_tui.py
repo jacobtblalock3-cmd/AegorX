@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from defentra import tui
+from aegorx import tui
 
 pytestmark = pytest.mark.skipif(
     not getattr(tui, "CURSES_AVAILABLE", True),
@@ -39,7 +39,7 @@ def test_button_layout_centers_within_width():
 
 
 def test_parse_audit_tail_reads_threats_and_events(tmp_home):
-    home = os.environ["DEFENTRA_HOME"]
+    home = os.environ["AEGORX_HOME"]
     os.makedirs(home, exist_ok=True)
     log = os.path.join(home, "realtime.log")
     records = [
@@ -64,11 +64,11 @@ def test_parse_audit_tail_reads_threats_and_events(tmp_home):
 
 
 def test_status_snapshot_reports_engines(tmp_home):
-    from defentra.signatures.db import SignatureDB
+    from aegorx.signatures.db import SignatureDB
 
     SignatureDB(None)  # ensure db exists with builtin seed
 
-    snap = tui.status_snapshot(state_dir_path=os.environ["DEFENTRA_HOME"])
+    snap = tui.status_snapshot(state_dir_path=os.environ["AEGORX_HOME"])
     assert snap["signatures"] >= 1
     assert snap["version"]
     assert snap["protection_alive"] is False  # no monitor running in tests

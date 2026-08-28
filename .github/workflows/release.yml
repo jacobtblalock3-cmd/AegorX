@@ -35,10 +35,10 @@ jobs:
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install --quiet dist/*.whl
-          /tmp/smoke/bin/defentra --version
-          /tmp/smoke/bin/defentra scan --help >/dev/null
+          /tmp/smoke/bin/aegorx --version
+          /tmp/smoke/bin/aegorx scan --help >/dev/null
           /tmp/smoke/bin/python - <<'PY'
-          from defentra.signing.keys import trusted_key_paths
+          from aegorx.signing.keys import trusted_key_paths
           bundled = [p for p in trusted_key_paths() if "/trusted_keys/" in p]
           assert bundled, "packaged wheel is missing the bundled root trust key"
           print("bundled trust keys:", bundled)
@@ -75,14 +75,14 @@ jobs:
           python - <<'PY'
           import json
           doc = json.load(open("release-assets/update-manifest.json"))
-          assert doc["format"] == "defentra-update-manifest" and doc["signature"]
+          assert doc["format"] == "aegorx-update-manifest" and doc["signature"]
           print("manifest ok:", doc["version"], sorted(doc["artifacts"]))
           PY
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: defentra-release-${{ github.ref_name }}
+          name: aegorx-release-${{ github.ref_name }}
           path: |
             dist/
             release-assets/
@@ -96,7 +96,7 @@ jobs:
             release-assets/* \
             dist/*.whl \
             dist/*.tar.gz \
-            --title "Defentra $GITHUB_REF_NAME" \
+            --title "AegorX $GITHUB_REF_NAME" \
             --notes "Automated release of $GITHUB_REF_NAME. Verify with SHA256SUMS; feeds and models are Ed25519-signed."
 
       - name: Check PyPI credentials

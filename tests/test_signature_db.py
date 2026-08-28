@@ -1,6 +1,6 @@
 import json
 
-from defentra.signatures.db import SignatureDB
+from aegorx.signatures.db import SignatureDB
 
 
 def test_fresh_db_is_seeded_with_eicar(tmp_path):

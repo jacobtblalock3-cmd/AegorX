@@ -9,11 +9,11 @@ import time
 
 import pytest
 
-from defentra.engine import ScanEngine
-from defentra.realtime.events import FileEvent, PathFilter, RealtimeUnavailableError
-from defentra.realtime.inotify_backend import EVENT_HEADER, parse_events
-from defentra.realtime.fanotify_backend import METADATA_STRUCT, parse_metadata
-from defentra.realtime.monitor import RealTimeMonitor, default_excludes, select_backend
+from aegorx.engine import ScanEngine
+from aegorx.realtime.events import FileEvent, PathFilter, RealtimeUnavailableError
+from aegorx.realtime.inotify_backend import EVENT_HEADER, parse_events
+from aegorx.realtime.fanotify_backend import METADATA_STRUCT, parse_metadata
+from aegorx.realtime.monitor import RealTimeMonitor, default_excludes, select_backend
 
 
 class FakeBackend:
@@ -43,7 +43,7 @@ class FakeBackend:
 @pytest.fixture
 def monitor(tmp_home, rules_dir, monkeypatch):
     monkeypatch.setattr(
-        "defentra.realtime.monitor.select_backend",
+        "aegorx.realtime.monitor.select_backend",
         lambda name, paths, excludes=None: FakeBackend(paths),
     )
     engine = ScanEngine(rules_dirs=[rules_dir], enable_ml=False)
@@ -64,15 +64,15 @@ def drain(monitor):
 
 
 def test_path_filter_matching():
-    f = PathFilter(["/home/*/.defentra/*", "/var/log/*.log"])
-    assert f.excluded("/home/jacob/.defentra/signatures.db")
+    f = PathFilter(["/home/*/.aegorx/*", "/var/log/*.log"])
+    assert f.excluded("/home/jacob/.aegorx/signatures.db")
     assert f.excluded("/var/log/app.log")
     assert not f.excluded("/var/log")
     assert not f.excluded("/etc/passwd")
 
 
 def test_default_excludes_cover_state_dir(tmp_home):
-    from defentra.utils import state_dir
+    from aegorx.utils import state_dir
 
     excludes = default_excludes()
     filt = PathFilter(excludes)
@@ -157,7 +157,7 @@ def test_monitor_clean_file_no_quarantine(monitor, benign_file):
 
 
 def test_monitor_excludes_state_dir(monitor):
-    from defentra.utils import state_dir
+    from aegorx.utils import state_dir
 
     inside = os.path.join(state_dir(), "something.db")
     mon = monitor
@@ -185,8 +185,8 @@ def test_select_backend_rejects_unknown():
 @pytest.mark.skipif(platform.system() == "Linux", reason="meaningful only off-Linux")
 def test_backends_unavailable_off_linux():
     """On non-Linux, fanotify and inotify are unavailable; auto picks a cross-platform backend."""
-    from defentra.realtime.fanotify_backend import FanotifyBackend
-    from defentra.realtime.inotify_backend import InotifyBackend
+    from aegorx.realtime.fanotify_backend import FanotifyBackend
+    from aegorx.realtime.inotify_backend import InotifyBackend
 
     assert not FanotifyBackend.available()
     assert not InotifyBackend.available()
@@ -196,7 +196,7 @@ def test_backends_unavailable_off_linux():
 
 
 def test_fswatch_backend_available():
-    from defentra.realtime.fswatch_backend import (
+    from aegorx.realtime.fswatch_backend import (
         FSwatchMacOSBackend,
         FSwatchWindowsBackend,
         create_fswatch_backend,
@@ -218,7 +218,7 @@ def test_fswatch_backend_available():
 
 
 def test_select_backend_fswatch():
-    from defentra.realtime.fswatch_backend import create_fswatch_backend
+    from aegorx.realtime.fswatch_backend import create_fswatch_backend
 
     system = platform.system()
     if system in ("Darwin", "Windows"):

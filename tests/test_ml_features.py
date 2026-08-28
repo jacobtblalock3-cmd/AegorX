@@ -1,8 +1,8 @@
 import pytest
 
-from defentra.ml.elf_features import NotElfError, parse_elf
-from defentra.ml.features import FEATURE_NAMES, extract_features, looks_executable, vectorize
-from defentra.ml.pe_features import NotPEError, parse_pe, suspicious_import_hits
+from aegorx.ml.elf_features import NotElfError, parse_elf
+from aegorx.ml.features import FEATURE_NAMES, extract_features, looks_executable, vectorize
+from aegorx.ml.pe_features import NotPEError, parse_pe, suspicious_import_hits
 
 
 def test_reject_garbage_pe():

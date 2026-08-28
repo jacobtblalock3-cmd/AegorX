@@ -12,7 +12,7 @@ they prefer to remain anonymous.
 
 ## Threat model
 
-Defentra is a local, single-host antivirus daemon plus CLI. There are no
+AegorX is a local, single-host antivirus daemon plus CLI. There are no
 network services, no user accounts, and no remote APIs exposed by the engine
 itself; it *consumes* HTTPS resources (signed signature feeds, model
 artifacts). The primary trust boundaries are:

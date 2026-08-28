@@ -1,4 +1,4 @@
-# Contributing to Defentra
+# Contributing to AegorX
 
 Thanks for helping build an open antivirus. This document covers the
 development setup, the gates every change must pass, and repo conventions.
@@ -6,8 +6,8 @@ development setup, the gates every change must pass, and repo conventions.
 ## Development setup
 
 ```bash
-git clone https://github.com/jacobtblalock3-cmd/defentra.git
-cd defentra
+git clone https://github.com/jacobtblalock3-cmd/AegorX.git
+cd aegorx
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 pip install pytest yara-python bandit[toml]
@@ -16,7 +16,7 @@ pip install pytest yara-python bandit[toml]
 Optional extras:
 
 ```bash
-pip install 'defentra[office]'     # VBA macro analysis (oletools)
+pip install 'aegorx[office]'     # VBA macro analysis (oletools)
 pip install lightgbm numpy         # ML detector
 cargo --version                    # optional Rust acceleration layer (rust-core/)
 ```
@@ -39,7 +39,7 @@ on every push by the `integration-linux` CI job on GitHub Actions runners.
 |---|---|---|
 | Tests (3.9–3.13) | `pytest tests/ -q` | all green |
 | Root integration | CI only (`integration-linux` job) | all green |
-| SAST | `bandit -r defentra scripts --severity-level medium --skip B101,B404,B603` | zero findings |
+| SAST | `bandit -r aegorx scripts --severity-level medium --skip B101,B404,B603` | zero findings |
 | Dependencies | `pip-audit --strict .` | no known vulns |
 | Secrets | pattern scan in CI | none |
 | CodeQL | GitHub default setup | no new alerts |
@@ -54,9 +54,9 @@ Run bandit + pytest locally before pushing; CI failures block merge.
   exceptions that escape the scanner (a scanner crash is a DoS vector).
   Fuzz-style tests live in `tests/test_fuzz.py`.
 - **Signed everything**: feeds, models, commands, update manifests are
-  Ed25519-signed against keys pinned in `defentra/signing/trusted_keys/`.
+  Ed25519-signed against keys pinned in `aegorx/signing/trusted_keys/`.
   New distribution channels must follow this trust model — see
-  `defentra/update.py` for the current reference implementation.
+  `aegorx/update.py` for the current reference implementation.
 - **Size caps + timeouts** on every download and parse path.
 - **Audit trail**: security-relevant actions write to the hash-chained audit
   logs, never just stdout.

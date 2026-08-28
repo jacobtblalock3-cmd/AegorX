@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from defentra.signatures.db import SignatureDB
-from defentra.signing.feed import (
+from aegorx.signatures.db import SignatureDB
+from aegorx.signing.feed import (
     FeedError,
     FeedExpired,
     apply_feed,
@@ -24,7 +24,7 @@ from defentra.signing.feed import (
     utc_now_iso,
     verify_document,
 )
-from defentra.signing.keys import (
+from aegorx.signing.keys import (
     default_signing_dir,
     generate_keypair,
     load_private_key,
@@ -98,9 +98,9 @@ def test_wrong_key_rejected(keypair, second_keypair):
 
 def test_missing_or_corrupt_signature_rejected():
     with pytest.raises(FeedError):
-        verify_document({"format": "defentra-signature-feed", "feed_version": 1})
+        verify_document({"format": "aegorx-signature-feed", "feed_version": 1})
     with pytest.raises(FeedError, match="base64"):
-        verify_document({"format": "defentra-signature-feed", "feed_version": 1, "signature": "!!!"})
+        verify_document({"format": "aegorx-signature-feed", "feed_version": 1, "signature": "!!!"})
     with pytest.raises(FeedError, match="bad 'format'"):
         verify_document({"format": "other"})
 
@@ -124,7 +124,7 @@ def test_replay_protection_and_force(tmp_home):
     old = {"generated_utc": "2026-01-01T00:00:00+00:00"}
     newer = {"generated_utc": "2026-06-01T00:00:00+00:00"}
     record_applied(old)
-    assert not os.environ.get("DEFENTRA_HOME") or True
+    assert not os.environ.get("AEGORX_HOME") or True
     assert check_replay(newer) is True
     assert check_replay({"generated_utc": "2025-12-31T23:59:59+00:00"}) is False
     assert check_replay({"generated_utc": "2020-01-01T00:00:00+00:00"}, force=True) is True
@@ -142,7 +142,7 @@ def test_apply_feed_into_db(tmp_path, keypair):
 
 
 def test_scan_detects_hash_from_applied_feed(tmp_path, rules_dir, keypair):
-    from defentra.engine import ScanEngine
+    from aegorx.engine import ScanEngine
 
     target = tmp_path / "dropper.exe"
     target.write_bytes(b"MZ" + b"\x90" * 128)
@@ -160,7 +160,7 @@ def test_scan_detects_hash_from_applied_feed(tmp_path, rules_dir, keypair):
 
 
 def test_fetch_feed_with_fake_opener():
-    payload = json.dumps({"format": "defentra-signature-feed", "feed_version": 1}).encode()
+    payload = json.dumps({"format": "aegorx-signature-feed", "feed_version": 1}).encode()
 
     class FakeResp:
         def __init__(self, data):
@@ -177,7 +177,7 @@ def test_fetch_feed_with_fake_opener():
             return False
 
     doc = fetch_feed("https://feeds.example/sig.json", opener=lambda url, timeout=0: FakeResp(payload))
-    assert doc["format"] == "defentra-signature-feed"
+    assert doc["format"] == "aegorx-signature-feed"
     with pytest.raises(FeedError, match="download failed"):
         fetch_feed("https://feeds.example/x", opener=lambda url, timeout=0: (_ for _ in ()).throw(OSError("down")))
 
@@ -199,4 +199,4 @@ def test_user_trust_store_roundtrip(tmp_home, keypair):
 
 
 def test_default_signing_dir_under_state(tmp_home):
-    assert default_signing_dir() == os.path.join(os.environ["DEFENTRA_HOME"], "signing")
+    assert default_signing_dir() == os.path.join(os.environ["AEGORX_HOME"], "signing")

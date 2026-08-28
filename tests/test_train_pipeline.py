@@ -98,7 +98,7 @@ def test_run_training_end_to_end_with_fake_booster(tmp_path):
     assert model_file.read_bytes() == b"fake-booster-weights"
     assert meta_file.exists() and sums.exists()
 
-    assert meta["format"] == "defentra-model-meta"
+    assert meta["format"] == "aegorx-model-meta"
     assert meta["source"] == "EMBER 2018"
     assert meta["num_features"] == 35
     assert meta["test_auc"] == pytest.approx(0.5)
