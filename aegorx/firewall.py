@@ -475,6 +475,87 @@ class WindowsOutboundEnforcer:
             return False
 
 
+class SinkholeOutboundEnforcer:
+    """Non-root outbound blocking via hosts file sinkholing.
+
+    Works on all platforms without elevated privileges by redirecting
+    blocked domains/IPs to 0.0.0.0 in the hosts file. This is the
+    fallback when kernel-level filtering is unavailable.
+    """
+
+    MARKER = "# AEGORX_BLOCK_START"
+    MARKER_END = "# AEGORX_BLOCK_END"
+
+    def __init__(self):
+        self._active = False
+        self._hosts_path = self._find_hosts_file()
+        self._blocked: set = set()
+
+    @staticmethod
+    def _find_hosts_file() -> str:
+        if sys.platform == "win32":
+            return os.path.join(
+                os.environ.get("SystemRoot", r"C:\Windows"),
+                "System32", "drivers", "etc", "hosts",
+            )
+        return "/etc/hosts"
+
+    def add_block(self, ip_or_domain: str) -> bool:
+        if ip_or_domain in self._blocked:
+            return True
+        self._blocked.add(ip_or_domain)
+        return self._flush()
+
+    def remove_block(self, ip_or_domain: str) -> bool:
+        if ip_or_domain not in self._blocked:
+            return True
+        self._blocked.discard(ip_or_domain)
+        return self._flush()
+
+    def clear_all(self) -> bool:
+        self._blocked.clear()
+        return self._flush()
+
+    def _flush(self) -> bool:
+        try:
+            existing = ""
+            if os.path.exists(self._hosts_path):
+                with open(self._hosts_path, "r", encoding="utf-8", errors="replace") as f:
+                    existing = f.read()
+
+            # Remove old block section
+            start = existing.find(self.MARKER)
+            end = existing.find(self.MARKER_END)
+            if start != -1 and end != -1:
+                end += len(self.MARKER_END)
+                while end < len(existing) and existing[end] in ("\n", "\r"):
+                    end += 1
+                existing = existing[:start] + existing[end:]
+            elif start != -1:
+                existing = existing[:start]
+
+            # Build new block section
+            if self._blocked:
+                lines = [self.MARKER]
+                for entry in sorted(self._blocked):
+                    lines.append(f"0.0.0.0 {entry}")
+                lines.append(self.MARKER_END)
+                block = "\n".join(lines) + "\n"
+                existing = existing.rstrip("\n") + "\n" + block
+
+            with open(self._hosts_path, "w", encoding="utf-8") as f:
+                f.write(existing)
+
+            self._active = bool(self._blocked)
+            return True
+        except (OSError, PermissionError) as e:
+            logger.warning("Sinkhole flush failed: %s", e)
+            return False
+
+    def is_active(self) -> bool:
+        return self._active
+
+
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
@@ -484,10 +565,12 @@ def get_outbound_enforcer():
     if sys.platform == "linux":
         if os.name == "posix" and os.geteuid() == 0 and shutil.which("iptables"):
             return IptablesOutboundEnforcer()
+        return SinkholeOutboundEnforcer()
     if sys.platform == "darwin":
         enforcer = PFOutboundEnforcer()
         if enforcer._is_available():
             return enforcer
+        return SinkholeOutboundEnforcer()
     if sys.platform == "win32":
         return WindowsOutboundEnforcer()
-    return None
+    return SinkholeOutboundEnforcer()

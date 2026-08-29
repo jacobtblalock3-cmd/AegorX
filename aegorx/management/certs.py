@@ -33,7 +33,7 @@ def generate_server_cert(
     subject = x509.Name(
         [
             x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Defentra Fleet"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "AegorX Fleet"),
         ]
     )
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -50,7 +50,7 @@ def generate_server_cert(
         .not_valid_after(now + datetime.timedelta(days=days))
         .add_extension(san, critical=False)
         .add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
+            x509.BasicConstraints(ca=False, path_length=None),
             critical=True,
         )
         .sign(key, hashes.SHA256())

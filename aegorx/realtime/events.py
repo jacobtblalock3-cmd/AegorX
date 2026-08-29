@@ -30,7 +30,8 @@ class PathFilter:
 
     def excluded(self, path: str) -> bool:
         for pattern in self.patterns:
-            if fnmatch.fnmatchcase(path, pattern):
+            # Use fnmatch for portability on case-insensitive filesystems (macOS, Windows)
+            if fnmatch.fnmatch(path, pattern):
                 return True
         return False
 

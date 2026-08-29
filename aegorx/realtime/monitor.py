@@ -282,6 +282,8 @@ class RealTimeMonitor:
             "skipped": 0,
         }
         self._stats_lock = threading.Lock()
+        self._debounce: Dict[str, float] = {}
+        self._debounce_window = 0.5  # seconds between redundant scans of same path
         self._stop_evt = threading.Event()
         self._started_at = 0.0
         self.backend.on_event = self._dispatch
@@ -369,10 +371,19 @@ class RealTimeMonitor:
                 return
         except OSError:
             return
+
+        # Debounce: skip if same path scanned recently
+        now = time.time()
+        last_scan = self._debounce.get(path, 0)
+        if now - last_scan < self._debounce_window:
+            self._bump("skipped")
+            return
+        self._debounce[path] = now
+
         if not self._inflight.acquire(blocking=False):
             self._bump("skipped")
             if self.audit is not None:
-                self._log({"ts": time.time(), "path": sanitize(path), "kind": event.kind, "dropped": "queue_saturated"})
+                self._log({"ts": now, "path": sanitize(path), "kind": event.kind, "dropped": "queue_saturated"})
             return
         self.pool.submit(self._process, event)
 

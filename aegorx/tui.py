@@ -57,6 +57,12 @@ def parse_audit_tail(path: str, limit: int = 12) -> List[Dict]:
     rows: List[Dict] = []
     try:
         with open(path, "r", encoding="utf-8") as fh:
+            # Read only the last portion of the file for efficiency
+            fh.seek(0, 2)
+            file_size = fh.tell()
+            # Read last 64KB or whole file, whichever is smaller
+            read_size = min(file_size, 65536)
+            fh.seek(max(0, file_size - read_size))
             lines = fh.readlines()[-limit:]
     except OSError:
         return rows

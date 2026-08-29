@@ -269,8 +269,17 @@ def download_artifact(entry: Dict, dest_dir: str, opener=None) -> str:
                 digest.update(chunk)
                 fh.write(chunk)
     except UpdateError:
+        # Clean up partial download on size/error failure
+        try:
+            os.remove(dest_path)
+        except OSError:
+            pass
         raise
     except Exception as exc:
+        try:
+            os.remove(dest_path)
+        except OSError:
+            pass
         raise UpdateError(f"artifact download failed: {exc}") from exc
 
     if written != expected_size:

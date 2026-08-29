@@ -54,6 +54,8 @@ def validate_policy(doc) -> Dict:
     interval = doc.get("scan_interval_seconds", 0)
     if not isinstance(interval, int) or isinstance(interval, bool) or interval < 0:
         raise PolicyError("scan_interval_seconds must be a non-negative integer")
+    if interval != 0 and interval < 60:
+        raise PolicyError("scan_interval_seconds must be 0 (disabled) or >= 60")
     out["scan_interval_seconds"] = interval
 
     paths = doc.get("scheduled_paths", [])

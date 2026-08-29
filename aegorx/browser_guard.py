@@ -34,12 +34,42 @@ def _default_download_paths() -> List[str]:
 
     if sys.platform == "linux":
         paths.append(os.path.join(home, "Downloads"))
+        # XDG user directories
+        try:
+            xdg_config = os.path.join(home, ".config", "user-dirs.dirs")
+            if os.path.isfile(xdg_config):
+                with open(xdg_config, "r") as f:
+                    for line in f:
+                        if line.startswith("XDG_DOWNLOAD_DIR"):
+                            _, val = line.strip().split("=", 1)
+                            val = val.strip('"').replace("$HOME", home)
+                            if os.path.isdir(val):
+                                paths.append(val)
+        except (OSError, ValueError):
+            pass
+        # Common browser-specific paths
+        for browser_dir in [
+            ".cache/chromium/Default/Downloads",
+            ".config/google-chrome/Default/Downloads",
+            ".mozilla/firefox",
+        ]:
+            p = os.path.join(home, browser_dir)
+            if os.path.isdir(p):
+                paths.append(p)
+
     elif sys.platform == "darwin":
         paths.append(os.path.join(home, "Downloads"))
+        # Safari, Chrome, Firefox may use custom paths
+        for browser_dir in [
+            "Library/Caches/TemporaryItems",  # Safari sometimes
+        ]:
+            p = os.path.join(home, browser_dir)
+            if os.path.isdir(p):
+                paths.append(p)
+
     elif sys.platform == "win32":
-        # Windows: use USERPROFILE
         paths.append(os.path.join(home, "Downloads"))
-        # Also check the registry for custom download location
+        # Registry for custom download location
         try:
             import winreg
             key = winreg.OpenKey(
@@ -47,13 +77,24 @@ def _default_download_paths() -> List[str]:
                 r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
             )
             downloads, _ = winreg.QueryValueEx(key, "{374DE290-123F-4565-9164-39C4925E467B}")
-            if downloads and os.path.isdir(downloads):
+            if downloads and os.path.isdir(downloads) and downloads not in paths:
                 paths.append(downloads)
             winreg.CloseKey(key)
         except (OSError, ImportError, FileNotFoundError):
             pass
+        # Browser-specific paths
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        if local_app:
+            for browser_dir in [
+                "Google/Chrome/User Data/Default/Downloads",
+                "Microsoft/Edge/User Data/Default/Downloads",
+                "BraveSoftware/Brave-Browser/User Data/Default/Downloads",
+            ]:
+                p = os.path.join(local_app, browser_dir)
+                if os.path.isdir(p):
+                    paths.append(p)
 
-    return [p for p in paths if os.path.isdir(p)]
+    return list(dict.fromkeys(p for p in paths if os.path.isdir(p)))
 
 
 # ---------------------------------------------------------------------------

@@ -43,10 +43,11 @@ def _is_valid_domain(host: str) -> bool:
         return False
     if host in ("localhost", "localhost.localdomain"):
         return False
-    # Reject IP addresses
+    # Reject IP addresses (including broadcast and null)
     try:
-        ipaddress.ip_address(host)
-        return False
+        ip = ipaddress.ip_address(host)
+        if ip.is_multicast or ip.is_reserved or ip.is_link_local:
+            return False
     except ValueError:
         pass
     return bool(_DOMAIN_RE.match(host))
@@ -159,8 +160,12 @@ def extract_domains_from_text(data: bytes) -> List[str]:
         if not line or line.startswith("#") or line.startswith("//"):
             continue
         # Skip IPs
-        if all(c in "0123456789." for c in line):
+        try:
+            import ipaddress
+            ipaddress.ip_address(line)
             continue
+        except ValueError:
+            pass
         if "." in line and " " not in line:
             domains.append(line.lower())
     return domains

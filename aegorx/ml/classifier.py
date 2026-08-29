@@ -66,7 +66,9 @@ class MalwareClassifier:
     def _load(self, model_path: Optional[str]) -> None:
         try:
             import lightgbm as lgb
-        except Exception:
+        except ImportError:
+            import logging
+            logging.debug("lightgbm not installed; ML detection disabled")
             return
         candidates = [model_path] if model_path else self._candidate_paths()
         for path in candidates:

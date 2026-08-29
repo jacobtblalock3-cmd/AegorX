@@ -115,6 +115,8 @@ class DNSFilter:
 
     @staticmethod
     def _normalize(domain: str) -> str:
+        if not domain:
+            return ""
         return domain.strip().lower().lstrip(".")
 
     @staticmethod

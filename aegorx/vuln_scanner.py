@@ -293,6 +293,52 @@ def _detect_windows() -> List[InstalledSoftware]:
     except (ImportError, OSError):
         pass
 
+    # winget detection
+    try:
+        result = subprocess.run(
+            ["winget", "list", "--accept-source-agreements", "--disable-interactivity"],
+            capture_output=True, timeout=60, text=True,
+            creationflags=0x08000000 if sys.platform == "win32" else 0,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                # winget output: Name  Id  Version  Available  Source
+                parts = line.split()
+                if len(parts) >= 3 and not line.startswith("Name"):
+                    name = parts[0]
+                    version = parts[2]
+                    if name and version and not version.startswith("https"):
+                        packages.append(InstalledSoftware(
+                            name=name.lower().replace(" ", "-"),
+                            version=version,
+                            source="winget",
+                        ))
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    # Chocolatey detection
+    try:
+        result = subprocess.run(
+            ["choco", "list", "--local-only", "--limit-output"],
+            capture_output=True, timeout=60, text=True,
+            creationflags=0x08000000 if sys.platform == "win32" else 0,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                # Chocolatey output: name|version
+                parts = line.split("|")
+                if len(parts) >= 2:
+                    name = parts[0]
+                    version = parts[1]
+                    if name and version:
+                        packages.append(InstalledSoftware(
+                            name=name.lower(),
+                            version=version,
+                            source="chocolatey",
+                        ))
+    except (OSError, subprocess.SubprocessError):
+        pass
+
     return packages
 
 

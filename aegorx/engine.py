@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import os
 import sys
 import shutil
@@ -107,6 +108,13 @@ class ScanEngine:
 
             self.classifier = MalwareClassifier()
 
+        # Scan result cache: (path, mtime, size) -> FileScanResult
+        # Prevents redundant full scans of unchanged files
+        self._scan_cache: collections.OrderedDict = collections.OrderedDict()
+        self._scan_cache_max = 4096
+        self._scan_cache_hits = 0
+        self._scan_cache_misses = 0
+
     @property
     def capabilities(self) -> Dict:
         return {
@@ -124,7 +132,7 @@ class ScanEngine:
         target = os.path.abspath(target)
         results: List[FileScanResult] = []
         if os.path.isdir(target):
-            for root, dirs, files in os.walk(target):
+            for root, dirs, files in os.walk(target, followlinks=False):
                 if not recursive:
                     dirs[:] = []
                 for name in sorted(files):
@@ -217,6 +225,19 @@ class ScanEngine:
         return result
 
     def _scan_file(self, path: str, depth: int) -> FileScanResult:
+        # Check scan result cache
+        try:
+            stat = os.stat(path)
+            cache_key = (path, stat.st_mtime, stat.st_size)
+        except OSError:
+            cache_key = None
+
+        if cache_key and cache_key in self._scan_cache:
+            self._scan_cache_hits += 1
+            self._scan_cache.move_to_end(cache_key)
+            return self._scan_cache[cache_key]
+
+        self._scan_cache_misses += 1
         result = FileScanResult(path=path)
         try:
             result.size = os.path.getsize(path)
@@ -353,6 +374,13 @@ class ScanEngine:
         if ml_failed and result.verdict == "clean":
             result.verdict = "error"
             result.error = "feature extraction failed on malformed input"
+
+        # Store in scan result cache (skip error results - they may be transient)
+        if cache_key and result.verdict != "error":
+            self._scan_cache[cache_key] = result
+            while len(self._scan_cache) > self._scan_cache_max:
+                self._scan_cache.popitem(last=False)
+
         return result
 
     def _scan_archive_contents(
